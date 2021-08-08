@@ -1,8 +1,8 @@
 use std::fs::File;
 
-use crate::jonas::SubstitutionSchedule;
+use crate::substitution_schedule::SubstitutionSchedule;
 
-mod jonas;
+mod substitution_schedule;
 mod tabula_json_parser;
 
 fn main() {
