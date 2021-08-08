@@ -1,12 +1,11 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::fs::File;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Error, Value};
 
-pub fn parse(file: File) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
-	let json: Value = serde_json::from_reader(file)?;
+pub fn parse(content: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
+	let json: Value = serde_json::from_str(content)?;
 	let array = json.as_array().ok_or("Json malformed")?;
 	let object = array[0].as_object().ok_or("Json malformed")?;
 	let data = object.get("data").ok_or("Json data field missing")?;
