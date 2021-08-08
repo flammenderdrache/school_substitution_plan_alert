@@ -78,7 +78,7 @@ impl SubstitutionSchedule {
 						3 => &mut substitutions.block_3,
 						4 => &mut substitutions.block_4,
 						5 => &mut substitutions.block_5,
-						_ => panic!(""),
+						_ => panic!("more then 5 lessons used"),
 					};
 
 					if !substitution_part.is_empty() {
