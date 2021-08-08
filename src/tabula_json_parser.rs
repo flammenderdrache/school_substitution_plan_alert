@@ -1,8 +1,9 @@
-use std::fs::File;
-use serde_json::{Value, Error};
-use std::fmt::Formatter;
 use std::fmt::Display;
-use serde::{Serialize, Deserialize};
+use std::fmt::Formatter;
+use std::fs::File;
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Error, Value};
 
 pub fn parse(file: File) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
 	let json: Value = serde_json::from_reader(file)?;
