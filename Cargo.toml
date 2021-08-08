@@ -1,0 +1,12 @@
+[package]
+name = "school_substitution_plan_alert"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lopdf = "0.26.0"
+serde_json = "1.0.66"
+serde = { version = "1.0.127", features = ["default", "derive"] }
+chrono = "0.4.19"
