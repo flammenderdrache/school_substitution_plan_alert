@@ -1,7 +1,16 @@
 use std::collections::HashMap;
 use serde::Serialize;
+use lopdf::Document;
 use chrono::{Local, NaiveDate, Utc, Offset, Date};
 use std::fmt::{Display, Formatter};
+use std::clone::Clone;
+use std::io::Read;
+use crate::tabula_json_parser::parse;
+use std::path::Path;
+use std::fs::File;
+use std::str;
+use std::process::Command;
+use std::ffi::OsStr;
 
 #[derive(Serialize)]
 pub struct Substitutions {
@@ -45,42 +54,20 @@ pub struct SubstitutionSchedule {
 }
 
 impl SubstitutionSchedule {
-	pub fn from_csv(csv: &mut Vec<Vec<String>>) -> Self {
-		// let text_array: Vec<&str> = text.trim().split("\n").collect();
-		//
-		// fn extract_date(text_array: Vec<&str>) -> Date<Local> {
-		//     let date_str: Vec<u32> = text_array[2].split(", ")
-		//         .last()
-		//         .unwrap()
-		//         .split(".")
-		//         .collect::<Vec<&str>>()
-		//         .iter()
-		//         .map(|s| (*s).parse::<u32>().unwrap())
-		//         .collect();
-		//
-		//     chrono::Date::<Local>::from_utc(
-		//         NaiveDate::from_ymd(date_str[2] as i32, date_str[1], date_str[0]),
-		//         Utc.fix()
-		//     )
-		// }
-		//
-		// print!("{}", text_array[4]);
-		//
-		// let entries: HashMap<String, Substitutions> = HashMap::new();
-
+	pub fn from_table(table: &Vec<Vec<String>>, date: i64) -> Self {
 		let mut entries: HashMap<String, Substitutions> = HashMap::new();
 
-		let classes = &csv[0][1..];
+		let classes = &table[0][1..];
 
 		for class in classes {
 			entries.insert(class.to_string(), Substitutions::new());
 		}
 
-		let mut line = 1;
+		let mut row = 1;
 
 		for lesson_idx in 0..5 {
 			loop {
-				for (i, substitution_part) in csv[line][1..].iter().enumerate() {
+				for (i, substitution_part) in table[row][1..].iter().enumerate() {
 
 					let substitutions = entries.get_mut(&classes[i]).unwrap();
 
@@ -94,27 +81,63 @@ impl SubstitutionSchedule {
 						_ => panic!(""),
 					};
 
-					if block.is_empty() {
-						block.push_str(substitution_part);
-					} else {
-						block.push_str(&format!("\n{}", substitution_part));
+					if !substitution_part.is_empty() {
+						if block.is_empty() {
+							block.push_str(substitution_part);
+						} else {
+							block.push_str(&format!("\n{}", substitution_part.to_string()));
+						}
 					}
 				}
 
-				if csv[line][0].starts_with("-") {
+				if table[row][0].starts_with("-") {
 					break
 				} else {
-					line += 1;
+					row += 1;
 				}
 			}
 
-			line += 1;
+			row += 1;
 		}
 
 		Self {
-			date: 0,
+			date,
 			entries,
 		}
+	}
+
+	pub fn from_pdf<T: AsRef<Path> + AsRef<OsStr>>(path: T) -> Result<Self, Box<dyn std::error::Error>> {
+		let pdf = Document::load(&path).unwrap().extract_text(&[1]).unwrap();
+
+		let date_idx_start = pdf.find("Datum: ").ok_or("date not found")?;
+		let date_idx_end = pdf[date_idx_start..].find("\n").ok_or("date end not found")? + date_idx_start;
+
+		let date_str: Vec<u32> = pdf[date_idx_start..date_idx_end].split(", ")
+			.last()
+			.ok_or("date string has no ','")?
+			.split(".")
+			.collect::<Vec<&str>>()
+			.iter()
+			.map(|s| (*s).parse::<u32>().unwrap())
+			.collect();
+
+		let date = chrono::Date::<Local>::from_utc(
+			NaiveDate::from_ymd(date_str[2] as i32, date_str[1], date_str[0]),
+			Utc.fix()
+		).and_hms(0, 0, 0).timestamp();
+
+		let output = Command::new("java")
+			.arg("-jar")
+			.arg("./tabula/tabula.jar")
+			.arg("-g")
+			.arg("-f")
+			.arg("JSON")
+			.arg(path)
+			.output()?;
+
+		let table = parse(str::from_utf8(&output.stdout).unwrap())?;
+
+		Ok(Self::from_table(&table, date))
 	}
 }
 
