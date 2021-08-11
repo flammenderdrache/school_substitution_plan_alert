@@ -12,7 +12,7 @@ use std::str;
 use std::process::Command;
 use std::ffi::OsStr;
 
-#[derive(Serialize)]
+#[derive(Serialize, PartialOrd, PartialEq)]
 pub struct Substitutions {
 	#[serde(rename(serialize = "0"))]
 	#[serde(skip_serializing_if = "String::is_empty")]
@@ -138,6 +138,10 @@ impl SubstitutionSchedule {
 		let table = parse(str::from_utf8(&output.stdout).unwrap())?;
 
 		Ok(Self::from_table(&table, date))
+	}
+
+	pub fn get_substitutions(&self, class: &str) -> Option<&Substitutions> {
+		self.entries.get(class)
 	}
 }
 
