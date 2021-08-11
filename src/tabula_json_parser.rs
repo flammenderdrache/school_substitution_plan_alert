@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Error, Value};
+use serde_json::Value;
 
 pub fn parse(content: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
 	let json: Value = serde_json::from_str(content)?;
