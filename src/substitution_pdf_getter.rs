@@ -2,6 +2,7 @@ use reqwest::Client;
 use std::io::Write;
 use std::time::Duration;
 
+///Enum with the weekdays where a Substitution PDF is available
 pub enum Weekdays {
 	Monday = 0,
 	Tuesday = 1,
@@ -29,6 +30,7 @@ impl<'a> SubstitutionPDFGetter<'a> {
 		}
 	}
 
+	///Returns an instance of self with a default client
 	pub fn default() -> Self {
 		let client = Client::builder()
 			.connect_timeout(Duration::from_secs(20))
@@ -42,6 +44,8 @@ impl<'a> SubstitutionPDFGetter<'a> {
 	}
 
 	/// Returns result with an Err or a Vector with the binary data of the request-response
+	/// Does not (yet) check if the response is valid
+	//TODO: Add check if the PDF is actually there or if the server is down or something
 	pub async fn get_weekday_pdf(&self, day: Weekdays) -> Result<Vec<u8>, reqwest::Error>{
 		let url = self.urls[day as usize];
 		let request = self.client

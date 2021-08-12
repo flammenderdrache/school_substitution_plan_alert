@@ -4,6 +4,7 @@ use std::fmt::Formatter;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+///Extracts the text from the rows and cells in the json that gets outputted by tabula
 pub fn parse(content: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
 	let json: Value = serde_json::from_str(content)?;
 	let array = json.as_array().ok_or("Json malformed")?;
@@ -29,12 +30,14 @@ pub fn parse(content: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Erro
 	Ok(rows_as_text)
 }
 
+///A row in the substitution table
 #[derive(Debug, Deserialize, Serialize)]
 struct Row {
 	row: Vec<Cell>,
 }
 
 impl Row {
+	///Gets the string content of every Cell inside the Row
 	pub fn extract_text(&mut self) -> Vec<String> {
 		let mut text = Vec::new();
 		for cell in &self.row {
@@ -45,6 +48,7 @@ impl Row {
 	}
 }
 
+///A cell in the substitution table
 #[derive(Debug, Deserialize, Serialize)]
 struct Cell {
 	top: f64,
