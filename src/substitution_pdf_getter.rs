@@ -1,8 +1,11 @@
-use reqwest::Client;
 use std::io::Write;
 use std::time::Duration;
 
+use chrono::Weekday;
+use reqwest::Client;
+
 ///Enum with the weekdays where a Substitution PDF is available
+#[derive(Debug, PartialOrd, PartialEq)]
 pub enum Weekdays {
 	Monday = 0,
 	Tuesday = 1,
@@ -11,8 +14,33 @@ pub enum Weekdays {
 	Friday = 4,
 }
 
+impl Weekdays {
+	pub fn next_day(&self) -> Self {
+		let mut num_day = self as usize;
+		if num_day == 4 {
+			Weekdays::Monday
+		} else {
+			num_day += 1;
+			num_day as Weekdays
+		}
+	}
+}
+
+impl From<Weekday> for Weekdays {
+	fn from(day: Weekday) -> Self {
+		match day {
+			Weekday::Mon => Weekdays::Monday,
+			Weekday::Tue => Weekdays::Tuesday,
+			Weekday::Wed => Weekdays::Wednesday,
+			Weekday::Thu => Weekdays::Thursday,
+			Weekday::Fri => Weekdays::Friday,
+			_ => Weekdays::Monday,
+		}
+	}
+}
+
 pub struct SubstitutionPDFGetter<'a> {
-	urls: [&'a str;5],
+	urls: [&'a str; 5],
 	client: Client,
 }
 
@@ -44,9 +72,8 @@ impl<'a> SubstitutionPDFGetter<'a> {
 	}
 
 	/// Returns result with an Err or a Vector with the binary data of the request-response
-	/// Does not (yet) check if the response is valid
-	//TODO: Add check if the PDF is actually there or if the server is down or something
-	pub async fn get_weekday_pdf(&self, day: Weekdays) -> Result<Vec<u8>, reqwest::Error>{
+	/// Does not check if the response is valid, this is the responsibility of the caller.
+	pub async fn get_weekday_pdf(&self, day: Weekdays) -> Result<Vec<u8>, reqwest::Error> {
 		let url = self.urls[day as usize];
 		let request = self.client
 			.get(url)

@@ -3,6 +3,8 @@ use crate::substitution_pdf_getter::*;
 use reqwest::Client;
 use std::time::Duration;
 use std::io::Write;
+use std::sync::Arc;
+use chrono::{Local, DateTime, Datelike, Weekday};
 
 mod substitution_schedule;
 mod tabula_json_parser;
@@ -35,10 +37,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// let mut bytes = response.bytes().await?;
 
 
-	let pdf_getter = SubstitutionPDFGetter::default();
-	let pdf_data = pdf_getter.get_weekday_pdf(Weekdays::Wednesday).await?;
+	// let pdf_getter = SubstitutionPDFGetter::default();
+	// let pdf_data = pdf_getter.get_weekday_pdf(Weekdays::Wednesday).await?;
+	//
+	// let mut new_pdf = std::fs::File::create("./download/Mittwoch.pdf")?;
+	//
+	// new_pdf.write_all(pdf_data.as_ref())?;
 
-	let mut new_pdf = std::fs::File::create("./download/Mittwoch.pdf")?;
+	let pdf_getter = Arc::new(SubstitutionPDFGetter::default());
+	let local: DateTime<Local> = Local::now();
+
+	let day = Weekdays::from(local.weekday());
+	println!("Today is: {:?}", day);
+	println!("The next day is: {:?}", day.next_day());
+
+	let pdf_data = pdf_getter.get_weekday_pdf(day.into()).await?;
+
+	let mut new_pdf = std::fs::File::create("./download/Montag.pdf")?;
 
 	new_pdf.write_all(pdf_data.as_ref())?;
 
