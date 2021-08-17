@@ -1,11 +1,11 @@
 use std::io::Write;
 use std::time::Duration;
-
 use chrono::Weekday;
 use reqwest::Client;
+use std::fmt::{Display, Formatter};
 
 ///Enum with the weekdays where a Substitution PDF is available
-#[derive(Debug, PartialOrd, PartialEq)]
+#[derive(Debug, PartialOrd, PartialEq, Clone, Copy)]
 pub enum Weekdays {
 	Monday = 0,
 	Tuesday = 1,
@@ -16,13 +16,27 @@ pub enum Weekdays {
 
 impl Weekdays {
 	pub fn next_day(&self) -> Self {
-		let mut num_day = self as usize;
-		if num_day == 4 {
-			Weekdays::Monday
-		} else {
-			num_day += 1;
-			num_day as Weekdays
+		match self {
+			Weekdays::Monday => Weekdays::Tuesday,
+			Weekdays::Tuesday => Weekdays::Wednesday,
+			Weekdays::Wednesday => Weekdays::Thursday,
+			Weekdays::Thursday => Weekdays::Friday,
+			Weekdays::Friday => Weekdays::Monday,
 		}
+	}
+}
+
+impl Display for Weekdays {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		let self_as_string = match self {
+			Weekdays::Monday => "Monday",
+			Weekdays::Tuesday => "Tuesday",
+			Weekdays::Wednesday => "Wednesday",
+			Weekdays::Thursday => "Thursday",
+			Weekdays::Friday => "Friday",
+		};
+
+		write!(f, "{}", self_as_string)
 	}
 }
 

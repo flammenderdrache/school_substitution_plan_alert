@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use lopdf::Document;
 use chrono::{Local, NaiveDate, Utc, Offset, Date};
 use std::fmt::{Display, Formatter};
@@ -11,8 +11,9 @@ use std::fs::File;
 use std::str;
 use std::process::Command;
 use std::ffi::OsStr;
+use std::time::SystemTime;
 
-#[derive(Serialize, PartialOrd, PartialEq)]
+#[derive(Serialize, Deserialize, PartialOrd, PartialEq)]
 pub struct Substitutions {
 	#[serde(rename(serialize = "0"))]
 	#[serde(skip_serializing_if = "String::is_empty")]
@@ -47,14 +48,18 @@ impl Substitutions {
 	}
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SubstitutionSchedule {
-	date: i64,
+	/// The creation date inside the PDF
+	pdf_create_date: i64,
+	/// The name of the class is the Key and the Value is a Substitutions struct
 	entries: HashMap<String, Substitutions>,
+	/// The time when the struct was created, used for comparing the age
+	struct_time: u64,
 }
 
 impl SubstitutionSchedule {
-	pub fn from_table(table: &Vec<Vec<String>>, date: i64) -> Self {
+	pub fn from_table(table: &Vec<Vec<String>>, pdf_create_date: i64) -> Self {
 		let mut entries: HashMap<String, Substitutions> = HashMap::new();
 
 		let classes = &table[0][1..];
@@ -85,7 +90,7 @@ impl SubstitutionSchedule {
 						if block.is_empty() {
 							block.push_str(substitution_part);
 						} else {
-							block.push_str(&format!("\n{}", substitution_part.to_string()));
+							block.push_str(&format!("\n{}", substitution_part.to_owned()));
 						}
 					}
 				}
@@ -100,9 +105,16 @@ impl SubstitutionSchedule {
 			row += 1;
 		}
 
+		let now = SystemTime::now();
+		let since_the_epoch = now
+			.duration_since(SystemTime::UNIX_EPOCH)
+			.expect("Time got fucked");
+		let time_millis = since_the_epoch.as_millis() as u64;
+
 		Self {
-			date,
+			pdf_create_date,
 			entries,
+			struct_time: time_millis,
 		}
 	}
 
@@ -142,6 +154,10 @@ impl SubstitutionSchedule {
 
 	pub fn get_substitutions(&self, class: &str) -> Option<&Substitutions> {
 		self.entries.get(class)
+	}
+
+	pub fn get_date(&self) -> i64 {
+		self.pdf_create_date
 	}
 }
 
