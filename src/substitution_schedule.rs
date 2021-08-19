@@ -1,13 +1,10 @@
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use lopdf::Document;
-use chrono::{Local, NaiveDate, Utc, Offset, Date};
+use chrono::{Local, NaiveDate, Utc, Offset};
 use std::fmt::{Display, Formatter};
-use std::clone::Clone;
-use std::io::Read;
 use crate::tabula_json_parser::parse;
 use std::path::Path;
-use std::fs::File;
 use std::str;
 use std::process::Command;
 use std::ffi::OsStr;
@@ -76,7 +73,7 @@ impl SubstitutionSchedule {
 
 					let substitutions = entries.get_mut(&classes[i]).unwrap();
 
-					let mut block = match lesson_idx {
+					let block = match lesson_idx {
 						0 => &mut substitutions.block_0,
 						1 => &mut substitutions.block_1,
 						2 => &mut substitutions.block_2,
@@ -154,10 +151,6 @@ impl SubstitutionSchedule {
 
 	pub fn get_substitutions(&self, class: &str) -> Option<&Substitutions> {
 		self.entries.get(class)
-	}
-
-	pub fn get_date(&self) -> i64 {
-		self.pdf_create_date
 	}
 }
 

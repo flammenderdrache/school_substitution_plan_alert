@@ -1,16 +1,14 @@
-use std::fs::{create_dir_all, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
-use std::process::Command;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
-use chrono::{Datelike, DateTime, Local, Weekday};
-use reqwest::Client;
+use chrono::{Datelike, DateTime, Local};
 use uuid::Uuid;
 
 use crate::substitution_pdf_getter::*;
-use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
+use crate::substitution_schedule::SubstitutionSchedule;
 
 mod substitution_schedule;
 mod tabula_json_parser;
@@ -25,39 +23,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let _ = std::fs::create_dir_all(TEMP_ROOT_DIR);
 	let _ = std::fs::create_dir_all(PDF_JSON_ROOT_DIR);
 
+	let mut counter: u32 = 0;
+
 	let pdf_getter = Arc::new(SubstitutionPDFGetter::default());
 
 	println!("Starting loop");
 	loop {
-		println!("Loop running");
+		println!("Loop executing");
 
 		let local: DateTime<Local> = Local::now();
 		let next_valid_school_weekday = Weekdays::from(local.weekday());
 		let day_after = next_valid_school_weekday.next_day();
 
+		println!("local day: {}; next valid school day: {}; day after that: {}", local.weekday(), next_valid_school_weekday, day_after);
+
 		let pdf_getter = pdf_getter.clone();
 
 		tokio::spawn(async move {
-			check_weekday_pdf(next_valid_school_weekday, pdf_getter).await;
-		}).await;
+			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter).await {
+				eprintln!("{}", why)
+			}
+		});
 
-		tokio::time::sleep(Duration::from_secs(60)).await;
+		counter += 1;
+		println!("Counter is at: {}", counter);
+		tokio::time::sleep(Duration::from_secs(20)).await;
 	}
-	println!("Program ended");
-
-	Ok(())
 }
 
 async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>) -> Result<(), Box<dyn std::error::Error>> {
-	let temp_dir_name = make_temp_dir();
+	let temp_dir_path = make_temp_dir();
 	let temp_file_name = get_random_name();
-	let temp_file_path = temp_dir_name + "/" + &temp_file_name;
+	let temp_file_path = format!("{}/{}", temp_dir_path, temp_file_name);
 
 	let temp_file_path = Path::new(&temp_file_path);
 
 	let pdf = pdf_getter.as_ref().get_weekday_pdf(day).await?;
 	let mut temp_pdf_file = std::fs::File::create(temp_file_path).expect("Couldn't create temp pdf file");
-	temp_pdf_file.write_all(&pdf);
+	temp_pdf_file.write_all(&pdf)?;
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
 
 	if let Some(new_substitutions) = new_schedule.get_substitutions("BGYM191") {
@@ -79,7 +82,10 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 		.open(format!("{}/{}.json", PDF_JSON_ROOT_DIR, day))
 		.expect("Couldn't open file to write new json");
 
-	substitution_file.write_all(new_substitution_json.as_bytes());
+	substitution_file.write_all(new_substitution_json.as_bytes())?;
+
+	std::fs::remove_file(temp_file_path)?;
+	std::fs::remove_dir(temp_dir_path)?;
 	Ok(())
 }
 

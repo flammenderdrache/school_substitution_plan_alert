@@ -1,4 +1,3 @@
-use std::io::Write;
 use std::time::Duration;
 use chrono::Weekday;
 use reqwest::Client;
@@ -96,8 +95,7 @@ impl<'a> SubstitutionPDFGetter<'a> {
 			.unwrap();
 
 		let response = self.client.execute(request).await?;
-		let mut bytes = response.bytes().await?;
-
+		let bytes = response.bytes().await?;
 
 		Ok(bytes.to_vec())
 	}
