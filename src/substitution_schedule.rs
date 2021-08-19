@@ -1,14 +1,16 @@
 use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
-use lopdf::Document;
-use chrono::{Local, NaiveDate, Utc, Offset};
-use std::fmt::{Display, Formatter};
-use crate::tabula_json_parser::parse;
-use std::path::Path;
-use std::str;
-use std::process::Command;
 use std::ffi::OsStr;
+use std::fmt::{Display, Formatter};
+use std::path::Path;
+use std::process::Command;
+use std::str;
 use std::time::SystemTime;
+
+use chrono::{Local, NaiveDate, Offset, Utc};
+use lopdf::Document;
+use serde::{Deserialize, Serialize};
+
+use crate::tabula_json_parser::parse;
 
 #[derive(Serialize, Deserialize, PartialOrd, PartialEq)]
 pub struct Substitutions {
@@ -40,7 +42,7 @@ impl Substitutions {
 			block_2: "".to_string(),
 			block_3: "".to_string(),
 			block_4: "".to_string(),
-			block_5: "".to_string()
+			block_5: "".to_string(),
 		}
 	}
 }
@@ -56,6 +58,7 @@ pub struct SubstitutionSchedule {
 }
 
 impl SubstitutionSchedule {
+	#[allow(clippy::ptr_arg)]
 	pub fn from_table(table: &Vec<Vec<String>>, pdf_create_date: i64) -> Self {
 		let mut entries: HashMap<String, Substitutions> = HashMap::new();
 
@@ -70,7 +73,6 @@ impl SubstitutionSchedule {
 		for lesson_idx in 0..5 {
 			loop {
 				for (i, substitution_part) in table[row][1..].iter().enumerate() {
-
 					let substitutions = entries.get_mut(&classes[i]).unwrap();
 
 					let block = match lesson_idx {
@@ -87,25 +89,25 @@ impl SubstitutionSchedule {
 						if block.is_empty() {
 							block.push_str(substitution_part);
 						} else {
-							block.push_str(&format!("\n{}", substitution_part.to_owned()));
+							block.push_str(&format!("\n{}", substitution_part.clone()));
 						}
 					}
 				}
 
-				if table[row][0].starts_with("-") {
-					break
-				} else {
-					row += 1;
+				if table[row][0].starts_with('-') {
+					break;
 				}
+				row += 1;
 			}
 
 			row += 1;
 		}
 
-		let now = SystemTime::now();
-		let since_the_epoch = now
+		let time_now = SystemTime::now();
+		let since_the_epoch = time_now
 			.duration_since(SystemTime::UNIX_EPOCH)
 			.expect("Time got fucked");
+		#[allow(clippy::cast_possible_truncation)]
 		let time_millis = since_the_epoch.as_millis() as u64;
 
 		Self {
@@ -119,20 +121,21 @@ impl SubstitutionSchedule {
 		let pdf = Document::load(&path).unwrap().extract_text(&[1]).unwrap();
 
 		let date_idx_start = pdf.find("Datum: ").ok_or("date not found")?;
-		let date_idx_end = pdf[date_idx_start..].find("\n").ok_or("date end not found")? + date_idx_start;
+		let date_idx_end = pdf[date_idx_start..].find('\n').ok_or("date end not found")? + date_idx_start;
 
 		let date_str: Vec<u32> = pdf[date_idx_start..date_idx_end].split(", ")
 			.last()
 			.ok_or("date string has no ','")?
-			.split(".")
+			.split('.')
 			.collect::<Vec<&str>>()
 			.iter()
 			.map(|s| (*s).parse::<u32>().unwrap())
 			.collect();
 
+		#[allow(clippy::cast_possible_wrap)]
 		let date = chrono::Date::<Local>::from_utc(
 			NaiveDate::from_ymd(date_str[2] as i32, date_str[1], date_str[0]),
-			Utc.fix()
+			Utc.fix(),
 		).and_hms(0, 0, 0).timestamp();
 
 		let output = Command::new("java")

@@ -41,7 +41,7 @@ impl Row {
 	pub fn extract_text(&mut self) -> Vec<String> {
 		let mut text = Vec::new();
 		for cell in &self.row {
-			text.push(cell.text.clone())
+			text.push(cell.text.clone());
 		}
 
 		text

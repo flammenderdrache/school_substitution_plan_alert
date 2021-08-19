@@ -7,7 +7,7 @@ use std::time::Duration;
 use chrono::{Datelike, DateTime, Local};
 use uuid::Uuid;
 
-use crate::substitution_pdf_getter::*;
+use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
 
 mod substitution_schedule;
@@ -20,8 +20,8 @@ const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	// Make sure the paths we want to use exist
-	let _ = std::fs::create_dir_all(TEMP_ROOT_DIR);
-	let _ = std::fs::create_dir_all(PDF_JSON_ROOT_DIR);
+	std::fs::create_dir_all(TEMP_ROOT_DIR)?;
+	std::fs::create_dir_all(PDF_JSON_ROOT_DIR)?;
 
 	let mut counter: u32 = 0;
 
@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 		tokio::spawn(async move {
 			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter).await {
-				eprintln!("{}", why)
+				eprintln!("{}", why);
 			}
 		});
 
@@ -100,6 +100,7 @@ fn make_temp_dir() -> String {
 	temp_dir
 }
 
+#[allow(clippy::non_ascii_literal)]
 fn notify_users() {
 	println!("Vertretungsplanänderung");
 }

@@ -14,7 +14,10 @@ pub enum Weekdays {
 }
 
 impl Weekdays {
-	pub fn next_day(&self) -> Self {
+
+	//It is not &self, just self here due to https://rust-lang.github.io/rust-clippy/master/index.html#trivially_copy_pass_by_ref
+	//Thank clippy :p
+	pub fn next_day(self) -> Self {
 		match self {
 			Weekdays::Monday => Weekdays::Tuesday,
 			Weekdays::Tuesday => Weekdays::Wednesday,
@@ -42,7 +45,6 @@ impl Display for Weekdays {
 impl From<Weekday> for Weekdays {
 	fn from(day: Weekday) -> Self {
 		match day {
-			Weekday::Mon => Weekdays::Monday,
 			Weekday::Tue => Weekdays::Tuesday,
 			Weekday::Wed => Weekdays::Wednesday,
 			Weekday::Thu => Weekdays::Thursday,
