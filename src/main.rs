@@ -9,6 +9,8 @@ use uuid::Uuid;
 
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
+use simple_logger::SimpleLogger;
+use log::LevelFilter;
 
 mod substitution_schedule;
 mod tabula_json_parser;
@@ -19,6 +21,12 @@ const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+	SimpleLogger::new()
+		.with_level(LevelFilter::Error)
+		.with_module_level("school_substitution_plan_alert", LevelFilter::Debug)
+		.init()
+		.unwrap();
+
 	// Make sure the paths we want to use exist
 	std::fs::create_dir_all(TEMP_ROOT_DIR)?;
 	std::fs::create_dir_all(PDF_JSON_ROOT_DIR)?;
@@ -29,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("Starting loop");
 	loop {
-		println!("Loop executing");
+		log::trace!("Loop start");
 
 		let local: DateTime<Local> = Local::now();
 		let next_valid_school_weekday = Weekdays::from(local.weekday());
@@ -39,6 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 		let pdf_getter = pdf_getter.clone();
 
+
 		tokio::spawn(async move {
 			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter).await {
 				eprintln!("{}", why);
@@ -46,19 +55,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		});
 
 		counter += 1;
-		println!("Counter is at: {}", counter);
+		log::debug!("Counter at {}", counter);
+		log::trace!("Loop end before sleep");
 		tokio::time::sleep(Duration::from_secs(20)).await;
 	}
 }
 
 async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>) -> Result<(), Box<dyn std::error::Error>> {
+	log::info!("Checking Weekday PDF for {}", day);
 	let temp_dir_path = make_temp_dir();
 	let temp_file_name = get_random_name();
 	let temp_file_path = format!("{}/{}", temp_dir_path, temp_file_name);
 
 	let temp_file_path = Path::new(&temp_file_path);
 
-	let pdf = pdf_getter.as_ref().get_weekday_pdf(day).await?;
+	let pdf = pdf_getter.get_weekday_pdf(day).await?;
 	let mut temp_pdf_file = std::fs::File::create(temp_file_path).expect("Couldn't create temp pdf file");
 	temp_pdf_file.write_all(&pdf)?;
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
@@ -94,6 +105,7 @@ fn get_random_name() -> String {
 }
 
 fn make_temp_dir() -> String {
+	log::debug!("creating temp directory");
 	let temp_dir_name = get_random_name();
 	let temp_dir = format!("{}/{}", TEMP_ROOT_DIR, temp_dir_name);
 	std::fs::create_dir(Path::new(&temp_dir)).expect("Could not create temp dir");
