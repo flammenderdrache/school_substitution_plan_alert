@@ -11,6 +11,7 @@ use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::{SubstitutionSchedule, Substitutions};
 use simple_logger::SimpleLogger;
 use log::LevelFilter;
+use crate::discord::DiscordNotifier;
 
 mod substitution_schedule;
 mod tabula_json_parser;
@@ -41,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let token = std::env::var("DISCORD_TOKEN").expect("Couldn't find the discord token in environment");
 	let prefix = std::env::var("PREFIX").expect("Couldn't find the prefix in environment");
-	let discord_notifier = discord::DiscordNotifier::new(token.as_str(), prefix.as_str()).await;
+	let discord_notifier = Arc::from(discord::DiscordNotifier::new(token.as_str(), prefix.as_str()).await);
 
 	log::info!("Starting loop");
 	loop {
@@ -55,15 +56,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
 		let pdf_getter_arc = pdf_getter.clone();
+		let discord_notifier_arc = discord_notifier.clone();
 		tokio::spawn(async move {
-			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter_arc).await {
+			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter_arc, discord_notifier_arc).await {
 				log::error!("{}", why)
 			}
 		});
 
 		let pdf_getter_arc = pdf_getter.clone();
+		let discord_notifier_arc = discord_notifier.clone();
 		tokio::spawn(async move {
-			if let Err(why) = check_weekday_pdf(day_after, pdf_getter_arc).await {
+			if let Err(why) = check_weekday_pdf(day_after, pdf_getter_arc, discord_notifier_arc).await {
 				log::error!("{}", why)
 			}
 		});
@@ -75,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	}
 }
 
-async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>) -> Result<(), Box<dyn std::error::Error>> {
+async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>) -> Result<(), Box<dyn std::error::Error>> {
 	log::info!("Checking PDF for {}", day);
 	let temp_dir_path = make_temp_dir();
 	let temp_file_name = get_random_name();

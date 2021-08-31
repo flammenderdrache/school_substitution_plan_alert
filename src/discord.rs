@@ -3,7 +3,7 @@ use serenity::{
 	framework::standard::{
 		CommandResult,
 		DispatchError,
-		macros::{group, hook, command},
+		macros::{group, hook, command, help},
 		StandardFramework,
 	},
 	model::{
@@ -21,11 +21,11 @@ use serenity::async_trait;
 use serde::{Serialize, Deserialize};
 use crate::substitution_pdf_getter::Weekdays;
 use std::path::Path;
-use serenity::framework::standard::Args;
+use serenity::framework::standard::{Args, HelpOptions, CommandGroup, help_commands};
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
-	classes_and_users: HashMap<String, Vec<u64>>,
+	classes_and_users: HashMap<String, HashSet<u64>>,
 }
 
 impl ClassesAndUsers {
@@ -70,9 +70,36 @@ impl ClassesAndUsers {
 		self.
 			classes_and_users
 			.entry(class)
-			.or_insert(Vec::new())
-			.push(user_id);
+			.or_insert(HashSet::new())
+			.insert(user_id);
 		self.write_to_file();
+	}
+
+	pub fn remove_user_from_class(&mut self, class: String, user_id: u64) -> bool {
+		log::debug!("Class for user {} is {}", &class, &user_id);
+		let mut successful = false;
+		if let Some(class_users) = self.classes_and_users.get_mut(&class) {
+			successful = class_users.remove(&user_id);
+			if class_users.is_empty() {
+				self.classes_and_users.remove(&class);
+			}
+		}
+		self.write_to_file();
+
+		successful
+	}
+
+	pub fn get_user_classes(&self, user_id: u64) -> Vec<String> {
+		let mut classes = Vec::new();
+		let classes_and_users = &self.classes_and_users;
+
+		for (class, user_ids) in classes_and_users {
+			if user_ids.contains(&user_id) {
+				classes.push(class.clone())
+			}
+		}
+
+		classes
 	}
 
 	pub fn get_classes(&self) -> Vec<String> {
@@ -119,6 +146,7 @@ impl DiscordNotifier {
 			.unrecognised_command(unknown_command)
 			.normal_message(normal_message)
 			.on_dispatch_error(dispatch_error)
+			.help(&MY_HELP)
 			.group(&GENERAL_GROUP);
 
 		let client_builder = Client::builder(token)
@@ -171,7 +199,6 @@ impl DiscordNotifier {
 		Ok(())
 	}
 
-	//TODO use the classes_and_users function to retrieve classes
 	async fn get_classes(&self) -> Vec<String> {
 		let mut data = self.data.read().await;
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
@@ -186,7 +213,7 @@ impl DiscordNotifier {
 }
 
 #[group]
-#[commands(register)]
+#[commands(register, show_classes, unregister)]
 pub struct General;
 
 #[command]
@@ -195,39 +222,64 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 	let user = msg.author.id.0;
 	let class = args.single::<String>().unwrap();
 	if class.len() < 3 {
-		let _ = msg.reply_ping(&ctx.http, "Incorrect Arguments").await;
+		msg.reply_ping(&ctx.http, "Incorrect Arguments").await?;
+		return Ok(());
 	}
 
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
 	classes_and_users.insert_user(class.clone(), user);
 
-	msg.reply_ping(&ctx.http, format!("Registered you for class {}", &class)).await;
-	log::debug!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
+	msg.reply_ping(&ctx.http, format!("Registered you for class {}", &class)).await?;
+	log::info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
 
 	Ok(())
 }
 
+#[command]
+#[aliases("classes", "list_classes")]
+async fn show_classes(ctx: &Context, msg: &Message) -> CommandResult {
+	let user = msg.author.id.0;
+	let channel = msg.channel_id;
+	let mut data = ctx.data.read().await;
+	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
+	let classes = classes_and_users.get_user_classes(user);
+
+	channel.send_message(&ctx.http, |msg|
+		msg.embed(|embed| {
+			embed.description(
+				if classes.is_empty() {
+					"You haven't registered for updates for any class".to_owned()
+				} else {
+					classes.join("\n")
+				}
+			)
+		}),
+	).await?;
+
+	Ok(())
+}
+
+#[command]
+#[aliases("remove", "delete")]
+async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+	let user = msg.author.id.0;
+	let class = args.single::<String>().unwrap();
+	if class.len() < 3 {
+		msg.reply_ping(&ctx.http, "Incorrect Arguments").await?;
+		return Ok(());
+	}
+
+	let mut data = ctx.data.write().await;
+	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
+	let success = classes_and_users.remove_user_from_class(class.clone(), user);
+
+	msg.reply_ping(&ctx.http, format!("Removed you from class {}", &class)).await?;
+	log::info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
 
 
-
-//Fuck this, async traits are hell currently
-// #[async_trait]
-// impl Notifier for DiscordNotifier {
-// 	async fn notify_users_for_class(&self, class: &str) {
-// 		todo!()
-// 	}
-//
-// 	async fn get_classes(&self) -> Vec<&str> {
-// 		todo!()
-// 	}
-//
-// 	async fn insert_user(&mut self, class: String, user_id: u64) {
-// 		let mut data = self.data.write().await;
-// 		let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-// 		classes_and_users.insert_user(class, user_id);
-// 	}
-// }
+	Ok(())
+}
 
 pub struct ConnectionPool;
 
@@ -290,9 +342,9 @@ pub struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-	async fn message(&self, ctx: Context, message: Message) {
-		log::info!("Message by: {} with content: {}", message.author.name, message.content);
-	}
+	// async fn message(&self, ctx: Context, message: Message) {
+	// 	log::info!("Message by: {} with content: {}", message.author.name, message.content);
+	// }
 
 	async fn ready(
 		&self,
@@ -301,4 +353,24 @@ impl EventHandler for Handler {
 	) {
 		log::info!("{} está aqui!", data_about_bot.user.name)
 	}
+}
+
+#[help]
+#[individual_command_tip = "If you want more information about a specific command, just pass the command as argument."]
+#[command_not_found_text = "Could not find command `{}`."]
+#[max_levenshtein_distance(3)]
+#[indention_prefix = "+"]
+#[lacking_permissions = "Hide"]
+#[lacking_role = "Nothing"]
+#[wrong_channel = "Nothing"]
+pub async fn my_help(
+	context: &Context,
+	msg: &Message,
+	args: Args,
+	help_options: &'static HelpOptions,
+	groups: &[&'static CommandGroup],
+	owners: HashSet<UserId>,
+) -> CommandResult {
+	let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
+	Ok(())
 }
