@@ -14,7 +14,7 @@ use sqlx::{Pool, Sqlite};
 use serenity::client::bridge::gateway::{GatewayIntents, ShardManager};
 use std::sync::Arc;
 use serenity::http::Http;
-use serenity::model::prelude::{UserId, Ready};
+use serenity::model::prelude::{UserId, Ready, Activity, OnlineStatus};
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use serenity::async_trait;
@@ -75,6 +75,7 @@ impl ClassesAndUsers {
 		self.write_to_file();
 	}
 
+	//maybe return result instead of bool
 	pub fn remove_user_from_class(&mut self, class: String, user_id: u64) -> bool {
 		log::debug!("Class for user {} is {}", &class, &user_id);
 		let mut successful = false;
@@ -179,7 +180,7 @@ impl DiscordNotifier {
 		}
 	}
 
-	async fn notify_users_for_class(&self, class: &str, day: Weekdays) -> Result<(), serenity::Error> {
+	pub async fn notify_users_for_class(&self, class: &str, day: Weekdays) -> Result<(), serenity::Error> {
 		log::info!("Notifying all users in class {} on day {}", class, day);
 
 		let data = self.data.read().await;
@@ -199,17 +200,17 @@ impl DiscordNotifier {
 		Ok(())
 	}
 
-	async fn get_classes(&self) -> Vec<String> {
-		let mut data = self.data.read().await;
+	pub async fn get_classes(&self) -> Vec<String> {
+		let data = self.data.read().await;
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 		classes_and_users.get_classes()
 	}
 
-	async fn insert_user(&mut self, class: String, user_id: u64) {
-		let mut data = self.data.write().await;
-		let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-		classes_and_users.insert_user(class, user_id);
-	}
+	// pub async fn insert_user(&mut self, class: String, user_id: u64) {
+	// 	let mut data = self.data.write().await;
+	// 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
+	// 	classes_and_users.insert_user(class, user_id);
+	// }
 }
 
 #[group]
@@ -242,7 +243,7 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 async fn show_classes(ctx: &Context, msg: &Message) -> CommandResult {
 	let user = msg.author.id.0;
 	let channel = msg.channel_id;
-	let mut data = ctx.data.read().await;
+	let data = ctx.data.read().await;
 	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 	let classes = classes_and_users.get_user_classes(user);
 
@@ -275,6 +276,9 @@ async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
 	let success = classes_and_users.remove_user_from_class(class.clone(), user);
+	if !success {
+		msg.reply_ping(&ctx.http, "An error occurred adding you to the class notifications").await?;
+	}
 
 	msg.reply_ping(&ctx.http, format!("Removed you from class {}", &class)).await?;
 	log::info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
@@ -350,10 +354,12 @@ impl EventHandler for Handler {
 
 	async fn ready(
 		&self,
-		_ctx: Context,
+		ctx: Context,
 		data_about_bot: Ready,
 	) {
-		log::info!("{} está aqui!", data_about_bot.user.name)
+		log::info!("{} está aqui!", data_about_bot.user.name);
+		let activity = Activity::playing("<:ferrisOwO:579331467000283136>");
+		ctx.set_presence(Some(activity), OnlineStatus::Online).await;
 	}
 }
 

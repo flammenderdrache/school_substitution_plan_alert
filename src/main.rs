@@ -8,7 +8,7 @@ use chrono::{Datelike, DateTime, Local};
 use uuid::Uuid;
 
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
-use crate::substitution_schedule::{SubstitutionSchedule, Substitutions};
+use crate::substitution_schedule::SubstitutionSchedule;
 use simple_logger::SimpleLogger;
 use log::LevelFilter;
 use crate::discord::DiscordNotifier;
@@ -90,19 +90,23 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let mut temp_pdf_file = std::fs::File::create(temp_file_path).expect("Couldn't create temp pdf file");
 	temp_pdf_file.write_all(&pdf)?;
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
-	let class = "BGYM191";
+	let classes = discord.get_classes().await;
 
-	if let Some(new_substitutions) = new_schedule.get_substitutions("BGYM191") {
-		if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
-			let old_schedule: SubstitutionSchedule = serde_json::from_reader(old_schedule_json).expect("For some reason the json of the old PDF was malformed.");
-			let old_substitutions = old_schedule.get_substitutions("BGYM191").unwrap(); //We save only when the class is there so unwrap is safe
-			if new_substitutions != old_substitutions {
-				notify_users(day, class, new_substitutions);
+	for class in classes {
+		if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
+			if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
+				let old_schedule: SubstitutionSchedule = serde_json::from_reader(old_schedule_json).expect("For some reason the json of the old PDF was malformed.");
+				if let Some(old_substitutions) = old_schedule.get_substitutions(class.as_str()) {
+					if new_substitutions != old_substitutions {
+						discord.notify_users_for_class(class.as_str(), day).await?;
+					}
+				}
+			} else {
+				discord.notify_users_for_class(class.as_str(), day).await?;
 			}
-		} else {
-			notify_users(day, class, new_substitutions);
 		}
 	}
+
 
 	let new_substitution_json = serde_json::to_string_pretty(&new_schedule).unwrap();
 	let mut substitution_file = OpenOptions::new()
@@ -129,10 +133,4 @@ fn make_temp_dir() -> String {
 	let temp_dir = format!("{}/{}", TEMP_ROOT_DIR, temp_dir_name);
 	std::fs::create_dir(Path::new(&temp_dir)).expect("Could not create temp dir");
 	temp_dir
-}
-
-#[allow(clippy::non_ascii_literal)]
-fn notify_users(weekday: Weekdays, class: &str, substitutions: &Substitutions) {
-	log::debug!("Change detected, notifying users for class {}", class);
-	println!("Vertretungsplanänderung:\n Klasse {} am {} hat folgende Änderungen:\n {}", weekday, class, substitutions);
 }
