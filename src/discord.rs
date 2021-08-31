@@ -147,7 +147,7 @@ impl DiscordNotifier {
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 
 		for user in classes_and_users.classes_and_users.get(class).unwrap() {
-			let user = UserId::from(user);
+			let user = UserId::from(*user);
 			let dm_channel = user.create_dm_channel(&self.http).await.unwrap();
 			dm_channel.say(&self.http, format!("Es gibt eine Vertretungsplanänderung für Klasse {}", class));//TODO refine, send the link to the corresponding day maybe too etc.
 		}
