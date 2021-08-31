@@ -47,6 +47,12 @@ impl Substitutions {
 	}
 }
 
+impl Display for Substitutions {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", serde_json::to_string_pretty(self).unwrap())
+	}
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct SubstitutionSchedule {
 	/// The creation date inside the PDF
