@@ -225,6 +225,7 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 		msg.reply_ping(&ctx.http, "Incorrect Arguments").await?;
 		return Ok(());
 	}
+	let class = class.to_uppercase();
 
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
@@ -269,6 +270,7 @@ async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 		msg.reply_ping(&ctx.http, "Incorrect Arguments").await?;
 		return Ok(());
 	}
+	let class = class.to_uppercase();
 
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
