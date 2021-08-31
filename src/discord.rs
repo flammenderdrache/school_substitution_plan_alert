@@ -358,7 +358,7 @@ impl EventHandler for Handler {
 		data_about_bot: Ready,
 	) {
 		log::info!("{} está aqui!", data_about_bot.user.name);
-		let activity = Activity::playing("<:ferrisOwO:579331467000283136>");
+		let activity = Activity::watching("the substitution plan ");
 		ctx.set_presence(Some(activity), OnlineStatus::Online).await;
 	}
 }
