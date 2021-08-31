@@ -57,14 +57,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		let pdf_getter_arc = pdf_getter.clone();
 		tokio::spawn(async move {
 			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter_arc).await {
-				eprintln!("{}", why);
+				log::error!("{}", why)
 			}
 		});
 
 		let pdf_getter_arc = pdf_getter.clone();
 		tokio::spawn(async move {
 			if let Err(why) = check_weekday_pdf(day_after, pdf_getter_arc).await {
-				eprintln!("{}", why);
+				log::error!("{}", why)
 			}
 		});
 
