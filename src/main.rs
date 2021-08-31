@@ -46,7 +46,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	log::info!("Starting loop");
 	loop {
 		log::trace!("Loop start");
-		discord_notifier.test().await;
 
 		let local: DateTime<Local> = Local::now();
 		let next_valid_school_weekday = Weekdays::from(local.weekday());
