@@ -371,7 +371,6 @@ impl EventHandler for Handler {
 #[lacking_permissions = "Hide"]
 #[lacking_role = "Hide"]
 #[wrong_channel = "Nothing"]
-#[lacking_ownership = "You are not registered as one of the bots administrators"]
 #[strikethrough_commands_tip_in_dm = ""]
 #[strikethrough_commands_tip_in_guild = ""]
 pub async fn my_help(
