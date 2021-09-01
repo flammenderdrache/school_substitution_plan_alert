@@ -62,10 +62,11 @@ impl ClassesAndUsers {
 			.expect("Couldn't open user save file");
 		let json = serde_json::to_string_pretty(self).unwrap();
 		if let Err(why) = file.write_all(json.as_bytes()) {
-			log::error!("{}", why)
+			log::error!("{}", why);
 		}
 	}
 
+	#[allow(clippy::or_fun_call)]
 	pub fn insert_user(&mut self, class: String, user_id: u64) {
 		self.
 			classes_and_users
@@ -76,13 +77,13 @@ impl ClassesAndUsers {
 	}
 
 	//maybe return result instead of bool
-	pub fn remove_user_from_class(&mut self, class: String, user_id: u64) -> bool {
-		log::debug!("Class for user {} is {}", &class, &user_id);
+	pub fn remove_user_from_class(&mut self, class: &str, user_id: u64) -> bool {
+		log::debug!("Class for user {} is {}", class, &user_id);
 		let mut successful = false;
-		if let Some(class_users) = self.classes_and_users.get_mut(&class) {
+		if let Some(class_users) = self.classes_and_users.get_mut(class) {
 			successful = class_users.remove(&user_id);
 			if class_users.is_empty() {
-				self.classes_and_users.remove(&class);
+				self.classes_and_users.remove(class);
 			}
 		}
 		self.write_to_file();
@@ -96,7 +97,7 @@ impl ClassesAndUsers {
 
 		for (class, user_ids) in classes_and_users {
 			if user_ids.contains(&user_id) {
-				classes.push(class.clone())
+				classes.push(class.clone());
 			}
 		}
 
@@ -124,14 +125,17 @@ pub trait Notifier {
 	fn insert_user(&mut self, class: String, user_id: u64);
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct DiscordNotifier {
 	http: Arc<Http>,
 	data: Arc<RwLock<TypeMap>>,
 }
 
 impl DiscordNotifier {
+	#[allow(clippy::unreadable_literal)]
 	pub async fn new(token: &str, prefix: &str) -> Self {
 		let mut owners = HashSet::new();
+
 		owners.insert(UserId::from(191594115907977225));
 
 		let framework = StandardFramework::new()
@@ -160,7 +164,7 @@ impl DiscordNotifier {
 		{
 			let mut data = client.data.write().await;
 			data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
-			data.insert::<ClassesAndUsers>(ClassesAndUsers::new_from_file())
+			data.insert::<ClassesAndUsers>(ClassesAndUsers::new_from_file());
 		}
 
 		let http = client.cache_and_http.http.clone();
@@ -280,7 +284,7 @@ async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-	let success = classes_and_users.remove_user_from_class(class.clone(), user);
+	let success = classes_and_users.remove_user_from_class(class.as_str(), user);
 	if !success {
 		msg.reply_ping(&ctx.http, "An error occurred adding you to the class notifications").await?;
 	}
@@ -327,7 +331,7 @@ pub async fn unknown_command(ctx: &Context, msg: &Message, unknown_command_name:
 	).await;
 
 	if let Err(why) = reply {
-		log::error!("Error replying to unknown command: {:?}", why)
+		log::error!("Error replying to unknown command: {:?}", why);
 	}
 }
 

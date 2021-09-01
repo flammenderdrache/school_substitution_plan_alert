@@ -1,17 +1,20 @@
-use std::fs::{OpenOptions, File};
+#![allow(clippy::non_ascii_literal)]
+#![allow(clippy::let_underscore_drop)]
+
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{Datelike, DateTime, Local};
+use log::LevelFilter;
+use simple_logger::SimpleLogger;
 use uuid::Uuid;
 
+use crate::discord::DiscordNotifier;
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
-use simple_logger::SimpleLogger;
-use log::LevelFilter;
-use crate::discord::DiscordNotifier;
 
 mod substitution_schedule;
 mod tabula_json_parser;
@@ -59,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		let discord_notifier_arc = discord_notifier.clone();
 		tokio::spawn(async move {
 			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter_arc, discord_notifier_arc).await {
-				log::error!("{}", why)
+				log::error!("{}", why);
 			}
 		});
 
@@ -67,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		let discord_notifier_arc = discord_notifier.clone();
 		tokio::spawn(async move {
 			if let Err(why) = check_weekday_pdf(day_after, pdf_getter_arc, discord_notifier_arc).await {
-				log::error!("{}", why)
+				log::error!("{}", why);
 			}
 		});
 
@@ -110,11 +113,11 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let old_schedule: Option<SubstitutionSchedule> = {
 		if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
 			match serde_json::from_reader(old_schedule_json) {
-				Ok(old_schedule) => {Some(old_schedule)},
+				Ok(old_schedule) => { Some(old_schedule) }
 				Err(why) => {
 					log::error!("{}", why);
 					None
-				},
+				}
 			}
 		} else {
 			None
