@@ -1,4 +1,4 @@
-use std::fs::OpenOptions;
+use std::fs::{OpenOptions, File};
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
@@ -92,10 +92,38 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
 	let classes = discord.get_classes().await;
 
+	// for class in classes {
+	// 	if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
+	// 		if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
+	// 			let old_schedule: SubstitutionSchedule = serde_json::from_reader(old_schedule_json).expect("For some reason the json of the old PDF was malformed.");
+	// 			if let Some(old_substitutions) = old_schedule.get_substitutions(class.as_str()) {
+	// 				if new_substitutions != old_substitutions {
+	// 					discord.notify_users_for_class(class.as_str(), day).await?;
+	// 				}
+	// 			}
+	// 		} else {
+	// 			discord.notify_users_for_class(class.as_str(), day).await?;
+	// 		}
+	// 	}
+	// }
+
+	let old_schedule: Option<SubstitutionSchedule> = {
+		if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
+			match serde_json::from_reader(old_schedule_json) {
+				Ok(old_schedule) => {Some(old_schedule)},
+				Err(why) => {
+					log::error!("{}", why);
+					None
+				},
+			}
+		} else {
+			None
+		}
+	};
+
 	for class in classes {
 		if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
-			if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
-				let old_schedule: SubstitutionSchedule = serde_json::from_reader(old_schedule_json).expect("For some reason the json of the old PDF was malformed.");
+			if let Some(old_schedule) = &old_schedule {
 				if let Some(old_substitutions) = old_schedule.get_substitutions(class.as_str()) {
 					if new_substitutions != old_substitutions {
 						discord.notify_users_for_class(class.as_str(), day).await?;
