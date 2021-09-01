@@ -95,6 +95,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
 	let classes = discord.get_classes().await;
 
+	//This is only still here to test the new loop. Will be removed at the next version
 	// for class in classes {
 	// 	if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
 	// 		if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
@@ -110,6 +111,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	// 	}
 	// }
 
+	//Open and parse the json file first, instead of at each iteration in the loop
 	let old_schedule: Option<SubstitutionSchedule> = {
 		if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
 			match serde_json::from_reader(old_schedule_json) {
