@@ -239,7 +239,7 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 }
 
 #[command]
-#[aliases("classes", "list_classes")]
+#[aliases("classes", "list_classes, list")]
 async fn show_classes(ctx: &Context, msg: &Message) -> CommandResult {
 	let user = msg.author.id.0;
 	let channel = msg.channel_id;
