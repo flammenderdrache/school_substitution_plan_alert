@@ -369,8 +369,11 @@ impl EventHandler for Handler {
 #[max_levenshtein_distance(3)]
 #[indention_prefix = "+"]
 #[lacking_permissions = "Hide"]
-#[lacking_role = "Nothing"]
+#[lacking_role = "Hide"]
 #[wrong_channel = "Nothing"]
+#[lacking_ownership = "You are not registered as one of the bots administrators"]
+#[strikethrough_commands_tip_in_dm = ""]
+#[strikethrough_commands_tip_in_guild = ""]
 pub async fn my_help(
 	context: &Context,
 	msg: &Message,
