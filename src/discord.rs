@@ -232,7 +232,12 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
 	classes_and_users.insert_user(class.clone(), user);
 
-	msg.reply_ping(&ctx.http, format!("Registered you for class {}", &class)).await?;
+	msg.reply_ping(&ctx.http, format!(
+		"Registered you for class {}.\n \
+		You will receive updates in the future.\n\
+		_Note that you might not receive an update for today or tomorrow if it was published before you registered._",
+		&class
+	)).await?;
 	log::info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
 
 	Ok(())
