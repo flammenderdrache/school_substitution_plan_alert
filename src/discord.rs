@@ -1,27 +1,27 @@
+use std::collections::{HashMap, HashSet};
+use std::io::Write;
+use std::path::Path;
+use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
 use serenity::{
-	prelude::*,
 	framework::standard::{
 		CommandResult,
 		DispatchError,
-		macros::{group, hook, command, help},
+		macros::{command, group, help, hook},
 		StandardFramework,
 	},
-	model::{
-		channel::Message,
-	},
+	model::channel::Message,
+	prelude::*,
 };
-use sqlx::{Pool, Sqlite};
-use serenity::client::bridge::gateway::{GatewayIntents, ShardManager};
-use std::sync::Arc;
-use serenity::http::Http;
-use serenity::model::prelude::{UserId, Ready, Activity, OnlineStatus};
-use std::collections::{HashMap, HashSet};
-use std::io::Write;
 use serenity::async_trait;
-use serde::{Serialize, Deserialize};
+use serenity::client::bridge::gateway::{GatewayIntents, ShardManager};
+use serenity::framework::standard::{Args, CommandGroup, help_commands, HelpOptions};
+use serenity::http::Http;
+use serenity::model::prelude::{Activity, OnlineStatus, Ready, UserId};
+use sqlx::{Pool, Sqlite};
+
 use crate::substitution_pdf_getter::Weekdays;
-use std::path::Path;
-use serenity::framework::standard::{Args, HelpOptions, CommandGroup, help_commands};
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -326,8 +326,11 @@ pub async fn after(_ctx: &Context, _msg: &Message, command_name: &str, command_r
 #[hook]
 pub async fn unknown_command(ctx: &Context, msg: &Message, unknown_command_name: &str) {
 	log::debug!("Could not find command named '{}'\n(Message content: \"{}\")", unknown_command_name, msg.content);
-	let reply = msg.channel_id.say(&ctx.http,
-								   format!("Sorry, couldn't find a command named '`{}`'\n\n With the `help` command you can list all available commands", unknown_command_name),
+	let reply = msg.channel_id.say(
+		&ctx.http,
+		format!(
+			"Sorry, couldn't find a command named '`{}`'\n\n With the `help` command you can list all available commands",
+			unknown_command_name),
 	).await;
 
 	if let Err(why) = reply {
