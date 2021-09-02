@@ -141,7 +141,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	}
 
 
-	let new_substitution_json = serde_json::to_string_pretty(&new_schedule).unwrap();
+	let new_substitution_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
 	let mut substitution_file = OpenOptions::new()
 		.write(true)
 		.create(true)
