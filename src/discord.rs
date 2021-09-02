@@ -223,6 +223,9 @@ pub struct General;
 
 #[command]
 #[aliases("register_class")]
+#[description("Subscribes you to notifications for a specific class.")]
+#[example("BGYM191")]
+#[example("FOS201")]
 async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 	let user = msg.author.id.0;
 	let class = args.single::<String>().unwrap();
@@ -249,6 +252,7 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
 #[command]
 #[aliases("classes", "list_classes", "list")]
+#[description("Lists all the classes whose notifications you subscribed to.")]
 async fn show_classes(ctx: &Context, msg: &Message) -> CommandResult {
 	let user = msg.author.id.0;
 	let channel = msg.channel_id;
@@ -273,6 +277,9 @@ async fn show_classes(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 #[aliases("remove", "delete")]
+#[description("Removes your subscription to notifications for a specific class.")]
+#[example("BGYM191")]
+#[example("FOS201")]
 async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 	let user = msg.author.id.0;
 	let class = args.single::<String>().unwrap();
