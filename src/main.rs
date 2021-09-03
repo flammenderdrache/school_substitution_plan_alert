@@ -115,8 +115,10 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let old_schedule: Option<SubstitutionSchedule> = {
 		let old_json_file = std::fs::OpenOptions::new()
 			.read(true)
-			.write(false);
-		if let Ok(old_schedule_json) = old_json_file.open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
+			.write(false)
+			.open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day));
+
+		if let Ok(old_schedule_json) = old_json_file {
 			match serde_json::from_reader(old_schedule_json) {
 				Ok(old_schedule) => { Some(old_schedule) }
 				Err(why) => {
