@@ -1347,6 +1347,7 @@ dependencies = [
  "dotenv",
  "log",
  "lopdf",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
