@@ -113,12 +113,15 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 
 	//Open and parse the json file first, instead of at each iteration in the loop
 	let old_schedule: Option<SubstitutionSchedule> = {
-		if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
+		let old_json_file = std::fs::OpenOptions::new()
+			.read(true)
+			.write(false);
+		if let Ok(old_schedule_json) = old_json_file.open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
 			match serde_json::from_reader(old_schedule_json) {
 				Ok(old_schedule) => { Some(old_schedule) }
 				Err(why) => {
 					log::error!("{}", why);
-					None
+					panic!("Error opening or parsing the old json");
 				}
 			}
 		} else {
