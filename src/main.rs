@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{Datelike, DateTime, Local};
-use log::LevelFilter;
+use log::{debug, error, info, LevelFilter, trace};
 use simple_logger::SimpleLogger;
 use uuid::Uuid;
 
@@ -47,22 +47,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let prefix = std::env::var("PREFIX").expect("Couldn't find the prefix in environment");
 	let discord_notifier = Arc::from(discord::DiscordNotifier::new(token.as_str(), prefix.as_str()).await);
 
-	log::info!("Starting loop");
+	info!("Starting loop");
 	loop {
-		log::trace!("Loop start");
+		trace!("Loop start");
 
 		let local: DateTime<Local> = Local::now();
 		let next_valid_school_weekday = Weekdays::from(local.weekday());
 		let day_after = next_valid_school_weekday.next_day();
 
-		log::debug!("Local day: {}; next valid school day: {}; day after that: {}", local.weekday(), next_valid_school_weekday, day_after);
+		debug!("Local day: {}; next valid school day: {}; day after that: {}", local.weekday(), next_valid_school_weekday, day_after);
 
 
 		let pdf_getter_arc = pdf_getter.clone();
 		let discord_notifier_arc = discord_notifier.clone();
 		tokio::spawn(async move {
 			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter_arc, discord_notifier_arc).await {
-				log::error!("{}", why);
+				error!("{}", why);
 			}
 		});
 
@@ -70,19 +70,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		let discord_notifier_arc = discord_notifier.clone();
 		tokio::spawn(async move {
 			if let Err(why) = check_weekday_pdf(day_after, pdf_getter_arc, discord_notifier_arc).await {
-				log::error!("{}", why);
+				error!("{}", why);
 			}
 		});
 
 		counter += 1;
-		log::debug!("Loop ran {} times", counter);
-		log::trace!("Loop end before sleep");
+		debug!("Loop ran {} times", counter);
+		trace!("Loop end before sleep");
 		tokio::time::sleep(Duration::from_secs(20)).await;
 	}
 }
 
 async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>) -> Result<(), Box<dyn std::error::Error>> {
-	log::info!("Checking PDF for {}", day);
+	info!("Checking PDF for {}", day);
 	let temp_dir_path = make_temp_dir();
 	let temp_file_name = get_random_name();
 	let temp_file_path = format!("{}/{}", temp_dir_path, temp_file_name);
@@ -122,7 +122,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 			match serde_json::from_reader(old_schedule_json) {
 				Ok(old_schedule) => { Some(old_schedule) }
 				Err(why) => {
-					log::error!("{}", why);
+					error!("{}", why);
 					panic!("Error parsing the old json");
 				}
 			}
@@ -162,12 +162,12 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 }
 
 fn get_random_name() -> String {
-	log::trace!("Returning random name");
+	trace!("Returning random name");
 	format!("{}", Uuid::new_v4())
 }
 
 fn make_temp_dir() -> String {
-	log::trace!("Creating temp directory");
+	trace!("Creating temp directory");
 	let temp_dir_name = get_random_name();
 	let temp_dir = format!("{}/{}", TEMP_ROOT_DIR, temp_dir_name);
 	std::fs::create_dir(Path::new(&temp_dir)).expect("Could not create temp dir");

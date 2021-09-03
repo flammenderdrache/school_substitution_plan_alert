@@ -3,6 +3,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use serenity::{
 	framework::standard::{
@@ -62,7 +63,7 @@ impl ClassesAndUsers {
 			.expect("Couldn't open user save file");
 		let json = serde_json::to_string_pretty(self).unwrap();
 		if let Err(why) = file.write_all(json.as_bytes()) {
-			log::error!("{}", why);
+			error!("{}", why);
 		}
 	}
 
@@ -78,7 +79,7 @@ impl ClassesAndUsers {
 
 	//maybe return result instead of bool
 	pub fn remove_user_from_class(&mut self, class: &str, user_id: u64) -> bool {
-		log::debug!("Class for user {} is {}", class, &user_id);
+		debug!("Class for user {} is {}", class, &user_id);
 		let mut successful = false;
 		if let Some(class_users) = self.classes_and_users.get_mut(class) {
 			successful = class_users.remove(&user_id);
@@ -173,7 +174,7 @@ impl DiscordNotifier {
 
 		tokio::spawn(async move {
 			if let Err(why) = client.start().await {
-				log::error!("{}", why);
+				error!("{}", why);
 			}
 			std::process::exit(69);
 		});
@@ -185,7 +186,7 @@ impl DiscordNotifier {
 	}
 
 	pub async fn notify_users_for_class(&self, class: &str, day: Weekdays) -> Result<(), serenity::Error> {
-		log::info!("Notifying all users in class {} on day {}", class, day);
+		info!("Notifying all users in class {} on day {}", class, day);
 
 		let data = self.data.read().await;
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
@@ -245,7 +246,7 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 		_Note that you might not receive an update for today or tomorrow if it was published before you registered._",
 		&class
 	)).await?;
-	log::info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
+	info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
 
 	Ok(())
 }
@@ -297,7 +298,7 @@ async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 	}
 
 	msg.reply_ping(&ctx.http, format!("Removed you from class {}", &class)).await?;
-	log::info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
+	info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
 
 
 	Ok(())
@@ -317,7 +318,7 @@ impl TypeMapKey for ShardManagerContainer {
 
 #[hook]
 pub async fn before(_ctx: &Context, msg: &Message, command_name: &str) -> bool {
-	log::info!("Got command '{}' by user '{}'", command_name, msg.author.name);
+	info!("Got command '{}' by user '{}'", command_name, msg.author.name);
 
 	true // if `before` returns false, command processing doesn't happen.
 }
@@ -325,14 +326,14 @@ pub async fn before(_ctx: &Context, msg: &Message, command_name: &str) -> bool {
 #[hook]
 pub async fn after(_ctx: &Context, _msg: &Message, command_name: &str, command_result: CommandResult) {
 	match command_result {
-		Ok(()) => log::info!("Processed command '{}'", command_name),
-		Err(why) => log::error!("Command returned an error: {:?}", why),
+		Ok(()) => info!("Processed command '{}'", command_name),
+		Err(why) => error!("Command returned an error: {:?}", why),
 	}
 }
 
 #[hook]
 pub async fn unknown_command(ctx: &Context, msg: &Message, unknown_command_name: &str) {
-	log::debug!("Could not find command named '{}'\n(Message content: \"{}\")", unknown_command_name, msg.content);
+	debug!("Could not find command named '{}'\n(Message content: \"{}\")", unknown_command_name, msg.content);
 	let reply = msg.channel_id.say(
 		&ctx.http,
 		format!(
@@ -341,13 +342,13 @@ pub async fn unknown_command(ctx: &Context, msg: &Message, unknown_command_name:
 	).await;
 
 	if let Err(why) = reply {
-		log::error!("Error replying to unknown command: {:?}", why);
+		error!("Error replying to unknown command: {:?}", why);
 	}
 }
 
 #[hook]
 pub async fn normal_message(_ctx: &Context, msg: &Message) {
-	log::info!("Processed non Command message: '{}'", msg.content)
+	info!("Processed non Command message: '{}'", msg.content)
 }
 
 #[hook]
@@ -368,7 +369,7 @@ pub struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
 	// async fn message(&self, ctx: Context, message: Message) {
-	// 	log::info!("Message by: {} with content: {}", message.author.name, message.content);
+	// 	info!("Message by: {} with content: {}", message.author.name, message.content);
 	// }
 
 	async fn ready(
@@ -376,7 +377,7 @@ impl EventHandler for Handler {
 		ctx: Context,
 		data_about_bot: Ready,
 	) {
-		log::info!("{} está aqui!", data_about_bot.user.name);
+		info!("{} está aqui!", data_about_bot.user.name);
 		let activity = Activity::watching("the substitution plan | ~help for help");
 		ctx.set_presence(Some(activity), OnlineStatus::Online).await;
 	}
