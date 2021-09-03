@@ -4,6 +4,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use log::{debug, error, info};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serenity::{
 	framework::standard::{
@@ -229,11 +230,17 @@ pub struct General;
 #[example("FOS201")]
 async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 	let user = msg.author.id.0;
-	let class = args.single::<String>().unwrap();
-	if class.len() < 3 {
-		msg.reply_ping(&ctx.http, "Incorrect Arguments").await?;
-		return Ok(());
+	let mut class = args.single::<String>().unwrap();
+
+	let sanitized_input = sanitize_and_check_register_class_input(class);
+	match sanitized_input {
+		Ok(x) => { class = x }
+		Err(x) => {
+			msg.reply_ping(&ctx.http, x).await?;
+			return Ok(());
+		}
 	}
+
 	let class = class.to_uppercase();
 
 	let mut data = ctx.data.write().await;
@@ -249,6 +256,27 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 	info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
 
 	Ok(())
+}
+
+fn sanitize_and_check_register_class_input(input: String) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+	// Pre-trims input to remove common spelling errors that should still be considered valid
+
+	let input = input.replace('.', "");
+
+	// Filter out invalid inputs
+
+	//Makes sure that the input contains at least one letter and number
+	let remainder: String = input.chars()
+		.map(|x| if x.is_alphanumeric() { "".to_string() } else { x.to_string() }).collect();
+
+	if remainder.len() != 0 {
+		return Err(format!("The following characters are not allowed {}", remainder).into());
+	}
+	if input.len() < 3 {
+		return Err("Too short input".into());
+	}
+
+	return Ok(String::from(input));
 }
 
 #[command]
