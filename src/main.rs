@@ -86,7 +86,6 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let temp_dir_path = make_temp_dir();
 	let temp_file_name = get_random_name();
 	let temp_file_path = format!("{}/{}", temp_dir_path, temp_file_name);
-
 	let temp_file_path = Path::new(&temp_file_path);
 
 	let pdf = pdf_getter.get_weekday_pdf(day).await?;

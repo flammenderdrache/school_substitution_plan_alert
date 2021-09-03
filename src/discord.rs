@@ -4,7 +4,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use log::{debug, error, info};
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serenity::{
 	framework::standard::{
@@ -234,14 +233,12 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
 	let sanitized_input = sanitize_and_check_register_class_input(class);
 	match sanitized_input {
-		Ok(x) => { class = x }
-		Err(x) => {
-			msg.reply_ping(&ctx.http, x).await?;
+		Ok(sanitized_input_class) => { class = sanitized_input_class }
+		Err(why) => {
+			msg.reply_ping(&ctx.http, why).await?;
 			return Ok(());
 		}
 	}
-
-	let class = class.to_uppercase();
 
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
@@ -256,27 +253,6 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 	info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
 
 	Ok(())
-}
-
-fn sanitize_and_check_register_class_input(input: String) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-	// Pre-trims input to remove common spelling errors that should still be considered valid
-
-	let input = input.replace('.', "");
-
-	// Filter out invalid inputs
-
-	//Makes sure that the input contains at least one letter and number
-	let remainder: String = input.chars()
-		.map(|x| if x.is_alphanumeric() { "".to_string() } else { x.to_string() }).collect();
-
-	if remainder.len() != 0 {
-		return Err(format!("The following characters are not allowed {}", remainder).into());
-	}
-	if input.len() < 3 {
-		return Err("Too short input".into());
-	}
-
-	return Ok(String::from(input));
 }
 
 #[command]
@@ -431,4 +407,71 @@ pub async fn my_help(
 ) -> CommandResult {
 	let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
 	Ok(())
+}
+
+///Removes the dots to make e.g. "BGYM19.1" valid (turning it into "BGYM191")
+///Also turns the input uppercase; "BGym19.1" -> "BGYM191" as that is how they are referred to in the PDF
+fn sanitize_and_check_register_class_input(input: String) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+	let input = input.replace('.', "");
+
+	if input.len() < 4 {
+		return Err("Argument too short".into())
+	}
+
+	if !(input.contains(|c: char| c.is_alphabetic()) &&
+		input.contains(|c: char| c.is_ascii_digit())) {
+		return Err("Argument is incorrectly formatted".into())
+	}
+
+	let input = input.to_uppercase();
+
+	return Ok(String::from(input));
+}
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	#[test]
+	fn test_sanitize_should_pass() {
+		let test_class = "BGYM191";
+		let output = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		assert_eq!(output, test_class);
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_sanitize_too_short() {
+		let test_class = "B2";
+		let _ = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+	}
+
+	#[test]
+	fn test_sanitize_remove_dots() {
+		let test_class = "BGYM19.1";
+		let output = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		assert_eq!(output, "BGYM191");
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_sanitize_missing_class_number() {
+		let test_class = "ELIAS";
+		let _ = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_sanitize_only_numbers() {
+		let test_class = "1234567420";
+		let _ = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_sanitize_check_between_large_char_and_small_char_ascii_value() {
+		let test_class = "BGY/@;19[1";
+		let output = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		assert_eq!(output, "BGYM191")
+	}
 }
