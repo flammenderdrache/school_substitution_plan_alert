@@ -150,6 +150,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let mut substitution_file = OpenOptions::new()
 		.write(true)
 		.create(true)
+		.truncate(true)
 		.open(format!("{}/{}.json", PDF_JSON_ROOT_DIR, day))
 		.expect("Couldn't open file to write new json");
 
