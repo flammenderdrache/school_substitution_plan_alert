@@ -123,7 +123,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 				Ok(old_schedule) => { Some(old_schedule) }
 				Err(why) => {
 					log::error!("{}", why);
-					panic!("Error opening or parsing the old json");
+					panic!("Error parsing the old json");
 				}
 			}
 		} else {
