@@ -23,6 +23,7 @@ use serenity::model::prelude::{Activity, OnlineStatus, Ready, UserId};
 use sqlx::{Pool, Sqlite};
 
 use crate::substitution_pdf_getter::Weekdays;
+use crate::config::Config;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -134,7 +135,7 @@ pub struct DiscordNotifier {
 
 impl DiscordNotifier {
 	#[allow(clippy::unreadable_literal)]
-	pub async fn new(token: &str, prefix: &str) -> Self {
+	pub async fn new(config: Config) -> Self {
 		let mut owners = HashSet::new();
 
 		owners.insert(UserId::from(191594115907977225));
@@ -143,7 +144,7 @@ impl DiscordNotifier {
 			.configure(|c| c
 				.with_whitespace(true)
 				.on_mention(Some(UserId::from(881938899876868107)))
-				.prefix(prefix)
+				.prefix(config.general.prefix.as_str())
 				.delimiters(vec![", ", ",", " "])
 				.owners(owners)
 			)
@@ -155,7 +156,7 @@ impl DiscordNotifier {
 			.help(&MY_HELP)
 			.group(&GENERAL_GROUP);
 
-		let client_builder = Client::builder(token)
+		let client_builder = Client::builder(config.general.discord_token.as_str())
 			.event_handler(Handler)
 			.framework(framework)
 			.intents(GatewayIntents::all()); //change to only require the intents we actually want
@@ -166,6 +167,7 @@ impl DiscordNotifier {
 			let mut data = client.data.write().await;
 			data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
 			data.insert::<ClassesAndUsers>(ClassesAndUsers::new_from_file());
+			data.insert::<Config>(config);
 		}
 
 		let http = client.cache_and_http.http.clone();

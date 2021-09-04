@@ -1,0 +1,4 @@
+[general]
+discord_token = 'YOUR TOKEN HERE'
+prefix = '-'
+class_registry_save_location = './class_registry.json'
