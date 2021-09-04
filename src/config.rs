@@ -35,8 +35,6 @@ impl TypeMapKey for Config {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-
 	#[test]
 	fn test_parse_config() {
 		let config_str = r"
