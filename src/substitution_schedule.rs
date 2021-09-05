@@ -15,22 +15,22 @@ use crate::tabula_json_parser::parse;
 #[derive(Serialize, Deserialize, PartialOrd, PartialEq)]
 pub struct Substitutions {
 	#[serde(rename(serialize = "0"))]
-	#[serde(skip_serializing_if = "String::is_empty")]
+	#[serde(rename(deserialize = "0"))]
 	pub block_0: String,
 	#[serde(rename(serialize = "1"))]
-	#[serde(skip_serializing_if = "String::is_empty")]
+	#[serde(rename(deserialize = "1"))]
 	pub block_1: String,
 	#[serde(rename(serialize = "2"))]
-	#[serde(skip_serializing_if = "String::is_empty")]
+	#[serde(rename(deserialize = "2"))]
 	pub block_2: String,
 	#[serde(rename(serialize = "3"))]
-	#[serde(skip_serializing_if = "String::is_empty")]
+	#[serde(rename(deserialize = "3"))]
 	pub block_3: String,
 	#[serde(rename(serialize = "4"))]
-	#[serde(skip_serializing_if = "String::is_empty")]
+	#[serde(rename(deserialize = "4"))]
 	pub block_4: String,
 	#[serde(rename(serialize = "5"))]
-	#[serde(skip_serializing_if = "String::is_empty")]
+	#[serde(rename(deserialize = "5"))]
 	pub block_5: String,
 }
 
@@ -114,7 +114,7 @@ impl SubstitutionSchedule {
 			.duration_since(SystemTime::UNIX_EPOCH)
 			.expect("Time got fucked");
 		#[allow(clippy::cast_possible_truncation)]
-		let time_millis = since_the_epoch.as_millis() as u64;
+			let time_millis = since_the_epoch.as_millis() as u64;
 
 		Self {
 			pdf_create_date,
@@ -139,7 +139,7 @@ impl SubstitutionSchedule {
 			.collect();
 
 		#[allow(clippy::cast_possible_wrap)]
-		let date = chrono::Date::<Local>::from_utc(
+			let date = chrono::Date::<Local>::from_utc(
 			NaiveDate::from_ymd(date_str[2] as i32, date_str[1], date_str[0]),
 			Utc.fix(),
 		).and_hms(0, 0, 0).timestamp();

@@ -1,27 +1,30 @@
+use std::collections::{HashMap, HashSet};
+use std::io::Write;
+use std::path::Path;
+use std::sync::Arc;
+
+use log::{debug, error, info};
+use serde::{Deserialize, Serialize};
 use serenity::{
-	prelude::*,
 	framework::standard::{
 		CommandResult,
 		DispatchError,
-		macros::{group, hook, command, help},
+		macros::{command, group, help, hook},
 		StandardFramework,
 	},
-	model::{
-		channel::Message,
-	},
+	model::channel::Message,
+	prelude::*,
 };
-use sqlx::{Pool, Sqlite};
-use serenity::client::bridge::gateway::{GatewayIntents, ShardManager};
-use std::sync::Arc;
-use serenity::http::Http;
-use serenity::model::prelude::{UserId, Ready};
-use std::collections::{HashMap, HashSet};
-use std::io::Write;
 use serenity::async_trait;
-use serde::{Serialize, Deserialize};
+use serenity::client::bridge::gateway::{GatewayIntents, ShardManager};
+use serenity::framework::standard::{Args, CommandGroup, help_commands, HelpOptions};
+use serenity::http::Http;
+use serenity::model::prelude::{Activity, OnlineStatus, Ready, UserId};
+use sqlx::{Pool, Sqlite};
+
 use crate::substitution_pdf_getter::Weekdays;
-use std::path::Path;
-use serenity::framework::standard::{Args, HelpOptions, CommandGroup, help_commands};
+use crate::config::Config;
+use crate::USER_AND_CLASSES_SAVE_LOCATION;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -35,9 +38,7 @@ impl ClassesAndUsers {
 		}
 	}
 
-	pub fn new_from_file() -> Self {
-		let path = std::env::var("USER_CLASSES_SAVE_LOCATION").expect("Couldn't find the save file location in the environment");
-		let path = Path::new(&path);
+	pub fn new_from_file(path: &Path) -> Self {
 		if !path.exists() {
 			return Self::default();
 		}
@@ -52,8 +53,7 @@ impl ClassesAndUsers {
 	}
 
 	//TODO make function Async and use Tokio async file operations
-	pub fn write_to_file(&self) {
-		let path = std::env::var("USER_CLASSES_SAVE_LOCATION").expect("Couldn't find the save file location in the environment");
+	pub fn write_to_file(&self, path: &Path) {
 		let mut file = std::fs::OpenOptions::new()
 			.write(true)
 			.create(true)
@@ -62,29 +62,31 @@ impl ClassesAndUsers {
 			.expect("Couldn't open user save file");
 		let json = serde_json::to_string_pretty(self).unwrap();
 		if let Err(why) = file.write_all(json.as_bytes()) {
-			log::error!("{}", why)
+			error!("{}", why);
 		}
 	}
 
-	pub fn insert_user(&mut self, class: String, user_id: u64) {
+	#[allow(clippy::or_fun_call)]
+	pub fn insert_user(&mut self, class: String, user_id: u64, user_and_classes_save_location: &Path) {
 		self.
 			classes_and_users
 			.entry(class)
 			.or_insert(HashSet::new())
 			.insert(user_id);
-		self.write_to_file();
+		self.write_to_file(user_and_classes_save_location);
 	}
 
-	pub fn remove_user_from_class(&mut self, class: String, user_id: u64) -> bool {
-		log::debug!("Class for user {} is {}", &class, &user_id);
+	//maybe return result instead of bool
+	pub fn remove_user_from_class(&mut self, class: &str, user_id: u64, user_and_classes_save_location: &Path) -> bool {
+		debug!("Class for user {} is {}", class, &user_id);
 		let mut successful = false;
-		if let Some(class_users) = self.classes_and_users.get_mut(&class) {
+		if let Some(class_users) = self.classes_and_users.get_mut(class) {
 			successful = class_users.remove(&user_id);
 			if class_users.is_empty() {
-				self.classes_and_users.remove(&class);
+				self.classes_and_users.remove(class);
 			}
 		}
-		self.write_to_file();
+		self.write_to_file(user_and_classes_save_location);
 
 		successful
 	}
@@ -95,7 +97,7 @@ impl ClassesAndUsers {
 
 		for (class, user_ids) in classes_and_users {
 			if user_ids.contains(&user_id) {
-				classes.push(class.clone())
+				classes.push(class.clone());
 			}
 		}
 
@@ -123,21 +125,24 @@ pub trait Notifier {
 	fn insert_user(&mut self, class: String, user_id: u64);
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct DiscordNotifier {
 	http: Arc<Http>,
 	data: Arc<RwLock<TypeMap>>,
 }
 
 impl DiscordNotifier {
-	pub async fn new(token: &str, prefix: &str) -> Self {
+	#[allow(clippy::unreadable_literal)]
+	pub async fn new(config: Config) -> Self {
 		let mut owners = HashSet::new();
+
 		owners.insert(UserId::from(191594115907977225));
 
 		let framework = StandardFramework::new()
 			.configure(|c| c
 				.with_whitespace(true)
 				.on_mention(Some(UserId::from(881938899876868107)))
-				.prefix(prefix)
+				.prefix(config.general.prefix.as_str())
 				.delimiters(vec![", ", ",", " "])
 				.owners(owners)
 			)
@@ -149,7 +154,7 @@ impl DiscordNotifier {
 			.help(&MY_HELP)
 			.group(&GENERAL_GROUP);
 
-		let client_builder = Client::builder(token)
+		let client_builder = Client::builder(config.general.discord_token.as_str())
 			.event_handler(Handler)
 			.framework(framework)
 			.intents(GatewayIntents::all()); //change to only require the intents we actually want
@@ -159,7 +164,8 @@ impl DiscordNotifier {
 		{
 			let mut data = client.data.write().await;
 			data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
-			data.insert::<ClassesAndUsers>(ClassesAndUsers::new_from_file())
+			data.insert::<ClassesAndUsers>(ClassesAndUsers::new_from_file(Path::new(USER_AND_CLASSES_SAVE_LOCATION)));
+			data.insert::<Config>(config);
 		}
 
 		let http = client.cache_and_http.http.clone();
@@ -168,7 +174,7 @@ impl DiscordNotifier {
 
 		tokio::spawn(async move {
 			if let Err(why) = client.start().await {
-				log::error!("{}", why);
+				error!("{}", why);
 			}
 			std::process::exit(69);
 		});
@@ -179,8 +185,8 @@ impl DiscordNotifier {
 		}
 	}
 
-	async fn notify_users_for_class(&self, class: &str, day: Weekdays) -> Result<(), serenity::Error> {
-		log::info!("Notifying all users in class {} on day {}", class, day);
+	pub async fn notify_users_for_class(&self, class: &str, day: Weekdays) -> Result<(), serenity::Error> {
+		info!("Notifying all users in class {} on day {}", class, day);
 
 		let data = self.data.read().await;
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
@@ -199,17 +205,17 @@ impl DiscordNotifier {
 		Ok(())
 	}
 
-	async fn get_classes(&self) -> Vec<String> {
-		let mut data = self.data.read().await;
+	pub async fn get_classes(&self) -> Vec<String> {
+		let data = self.data.read().await;
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 		classes_and_users.get_classes()
 	}
 
-	async fn insert_user(&mut self, class: String, user_id: u64) {
-		let mut data = self.data.write().await;
-		let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-		classes_and_users.insert_user(class, user_id);
-	}
+	// pub async fn insert_user(&mut self, class: String, user_id: u64) {
+	// 	let mut data = self.data.write().await;
+	// 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
+	// 	classes_and_users.insert_user(class, user_id);
+	// }
 }
 
 #[group]
@@ -218,31 +224,44 @@ pub struct General;
 
 #[command]
 #[aliases("register_class")]
+#[description("Subscribes you to notifications for a specific class.")]
+#[example("BGYM191")]
+#[example("FOS201")]
 async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 	let user = msg.author.id.0;
-	let class = args.single::<String>().unwrap();
-	if class.len() < 3 {
-		msg.reply_ping(&ctx.http, "Incorrect Arguments").await?;
-		return Ok(());
+	let mut class = args.single::<String>().unwrap();
+
+	let sanitized_input = sanitize_and_check_register_class_input(class);
+	match sanitized_input {
+		Ok(sanitized_input_class) => { class = sanitized_input_class }
+		Err(why) => {
+			msg.reply_ping(&ctx.http, why).await?;
+			return Ok(());
+		}
 	}
-	let class = class.to_uppercase();
 
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-	classes_and_users.insert_user(class.clone(), user);
+	classes_and_users.insert_user(class.clone(), user, Path::new(USER_AND_CLASSES_SAVE_LOCATION));
 
-	msg.reply_ping(&ctx.http, format!("Registered you for class {}", &class)).await?;
-	log::info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
+	msg.reply_ping(&ctx.http, format!(
+		"Registered you for class {}.\n \
+		You will receive updates in the future.\n\
+		_Note that you might not receive an update for today or tomorrow if it was published before you registered._",
+		&class
+	)).await?;
+	info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
 
 	Ok(())
 }
 
 #[command]
-#[aliases("classes", "list_classes")]
+#[aliases("classes", "list_classes", "list")]
+#[description("Lists all the classes whose notifications you subscribed to.")]
 async fn show_classes(ctx: &Context, msg: &Message) -> CommandResult {
 	let user = msg.author.id.0;
 	let channel = msg.channel_id;
-	let mut data = ctx.data.read().await;
+	let data = ctx.data.read().await;
 	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 	let classes = classes_and_users.get_user_classes(user);
 
@@ -263,6 +282,9 @@ async fn show_classes(ctx: &Context, msg: &Message) -> CommandResult {
 
 #[command]
 #[aliases("remove", "delete")]
+#[description("Removes your subscription to notifications for a specific class.")]
+#[example("BGYM191")]
+#[example("FOS201")]
 async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 	let user = msg.author.id.0;
 	let class = args.single::<String>().unwrap();
@@ -274,10 +296,13 @@ async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-	let success = classes_and_users.remove_user_from_class(class.clone(), user);
+	let success = classes_and_users.remove_user_from_class(class.as_str(), user, Path::new(USER_AND_CLASSES_SAVE_LOCATION));
+	if !success {
+		msg.reply_ping(&ctx.http, "An error occurred adding you to the class notifications").await?;
+	}
 
 	msg.reply_ping(&ctx.http, format!("Removed you from class {}", &class)).await?;
-	log::info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
+	info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
 
 
 	Ok(())
@@ -297,7 +322,7 @@ impl TypeMapKey for ShardManagerContainer {
 
 #[hook]
 pub async fn before(_ctx: &Context, msg: &Message, command_name: &str) -> bool {
-	log::info!("Got command '{}' by user '{}'", command_name, msg.author.name);
+	info!("Got command '{}' by user '{}'", command_name, msg.author.name);
 
 	true // if `before` returns false, command processing doesn't happen.
 }
@@ -305,26 +330,29 @@ pub async fn before(_ctx: &Context, msg: &Message, command_name: &str) -> bool {
 #[hook]
 pub async fn after(_ctx: &Context, _msg: &Message, command_name: &str, command_result: CommandResult) {
 	match command_result {
-		Ok(()) => log::info!("Processed command '{}'", command_name),
-		Err(why) => log::error!("Command returned an error: {:?}", why),
+		Ok(()) => info!("Processed command '{}'", command_name),
+		Err(why) => error!("Command returned an error: {:?}", why),
 	}
 }
 
 #[hook]
 pub async fn unknown_command(ctx: &Context, msg: &Message, unknown_command_name: &str) {
-	log::debug!("Could not find command named '{}'\n(Message content: \"{}\")", unknown_command_name, msg.content);
-	let reply = msg.channel_id.say(&ctx.http,
-								   format!("Sorry, couldn't find a command named '`{}`'\n\n With the `help` command you can list all available commands", unknown_command_name),
+	debug!("Could not find command named '{}'\n(Message content: \"{}\")", unknown_command_name, msg.content);
+	let reply = msg.channel_id.say(
+		&ctx.http,
+		format!(
+			"Sorry, couldn't find a command named '`{}`'\n\n With the `help` command you can list all available commands",
+			unknown_command_name),
 	).await;
 
 	if let Err(why) = reply {
-		log::error!("Error replying to unknown command: {:?}", why)
+		error!("Error replying to unknown command: {:?}", why);
 	}
 }
 
 #[hook]
 pub async fn normal_message(_ctx: &Context, msg: &Message) {
-	log::info!("Processed non Command message: '{}'", msg.content)
+	info!("Processed non Command message: '{}'", msg.content)
 }
 
 #[hook]
@@ -345,15 +373,17 @@ pub struct Handler;
 #[async_trait]
 impl EventHandler for Handler {
 	// async fn message(&self, ctx: Context, message: Message) {
-	// 	log::info!("Message by: {} with content: {}", message.author.name, message.content);
+	// 	info!("Message by: {} with content: {}", message.author.name, message.content);
 	// }
 
 	async fn ready(
 		&self,
-		_ctx: Context,
+		ctx: Context,
 		data_about_bot: Ready,
 	) {
-		log::info!("{} está aqui!", data_about_bot.user.name)
+		info!("{} está aqui!", data_about_bot.user.name);
+		let activity = Activity::watching("the substitution plan | ~help for help");
+		ctx.set_presence(Some(activity), OnlineStatus::Online).await;
 	}
 }
 
@@ -363,8 +393,10 @@ impl EventHandler for Handler {
 #[max_levenshtein_distance(3)]
 #[indention_prefix = "+"]
 #[lacking_permissions = "Hide"]
-#[lacking_role = "Nothing"]
+#[lacking_role = "Hide"]
 #[wrong_channel = "Nothing"]
+#[strikethrough_commands_tip_in_dm = ""]
+#[strikethrough_commands_tip_in_guild = ""]
 pub async fn my_help(
 	context: &Context,
 	msg: &Message,
@@ -375,4 +407,71 @@ pub async fn my_help(
 ) -> CommandResult {
 	let _ = help_commands::with_embeds(context, msg, args, help_options, groups, owners).await;
 	Ok(())
+}
+
+///Removes the dots to make e.g. "BGYM19.1" valid (turning it into "BGYM191")
+///Also turns the input uppercase; "BGym19.1" -> "BGYM191" as that is how they are referred to in the PDF
+fn sanitize_and_check_register_class_input(input: String) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+	let input = input.replace('.', "");
+
+	if input.len() < 4 {
+		return Err("Argument too short".into())
+	}
+
+	if !(input.contains(|c: char| c.is_alphabetic()) &&
+		input.contains(|c: char| c.is_ascii_digit())) {
+		return Err("Argument is incorrectly formatted".into())
+	}
+
+	let input = input.to_uppercase();
+
+	return Ok(String::from(input));
+}
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	#[test]
+	fn test_sanitize_should_pass() {
+		let test_class = "BGYM191";
+		let output = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		assert_eq!(output, test_class);
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_sanitize_too_short() {
+		let test_class = "B2";
+		let _ = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+	}
+
+	#[test]
+	fn test_sanitize_remove_dots() {
+		let test_class = "BGYM19.1";
+		let output = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		assert_eq!(output, "BGYM191");
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_sanitize_missing_class_number() {
+		let test_class = "ELIAS";
+		let _ = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_sanitize_only_numbers() {
+		let test_class = "1234567420";
+		let _ = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_sanitize_check_between_large_char_and_small_char_ascii_value() {
+		let test_class = "BGY/@;19[1";
+		let output = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		assert_eq!(output, "BGYM191")
+	}
 }

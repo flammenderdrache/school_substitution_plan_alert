@@ -1,7 +1,8 @@
+use std::fmt::{Display, Formatter};
 use std::time::Duration;
+
 use chrono::Weekday;
 use reqwest::Client;
-use std::fmt::{Display, Formatter};
 
 ///Enum with the weekdays where a Substitution PDF is available
 #[derive(Debug, PartialOrd, PartialEq, Clone, Copy)]
@@ -14,7 +15,6 @@ pub enum Weekdays {
 }
 
 impl Weekdays {
-
 	//It is not &self, just self here due to https://rust-lang.github.io/rust-clippy/master/index.html#trivially_copy_pass_by_ref
 	//Thank clippy :p
 	pub fn next_day(self) -> Self {

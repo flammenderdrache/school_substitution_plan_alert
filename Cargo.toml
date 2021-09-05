@@ -1,6 +1,6 @@
 [package]
 name = "school_substitution_plan_alert"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -9,13 +9,14 @@ edition = "2018"
 lopdf = "0.26.0"
 serde_json = "1.0.66"
 serde = { version = "1.0.127", features = ["default", "derive"] }
+toml = "0.5.8"
 chrono = "0.4.19"
 reqwest = "0.11.4"
 tokio = { version = "1.9.0", features = ["full"] }
 log = "0.4.14"
 simple_logger = "1.11.0"
 uuid = { version = "0.8.2", features = ["v4"] }
-sqlx = { version = "0.5", features = [ "runtime-tokio-rustls", "sqlite", "macros", "chrono", ] }
+sqlx = { version = "0.5", features = ["runtime-tokio-rustls", "sqlite", "macros", "chrono", ] }
 dotenv = "0.15.0"
 
 [dependencies.serenity]
