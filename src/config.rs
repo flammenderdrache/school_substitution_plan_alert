@@ -15,7 +15,7 @@ pub struct General {
 }
 
 impl Config {
-	pub fn new_from_file(mut file: File) -> Self {
+	pub fn from_file(mut file: File) -> Self {
 		let mut file_contents = String::new();
 		file.read_to_string(&mut file_contents).expect("Couldn't read config file");
 
