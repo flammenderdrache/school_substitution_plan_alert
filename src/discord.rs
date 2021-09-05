@@ -195,7 +195,7 @@ impl DiscordNotifier {
 			let user = UserId::from(*user);
 			let dm_channel = user.create_dm_channel(&self.http).await?;
 			dm_channel.say(&self.http, format!(
-				"Es gibt eine Vertretungsplanänderung am {} für Klasse {}",
+				"There is a change in schedule on {} for class {}",
 				day,
 				class,
 			),
