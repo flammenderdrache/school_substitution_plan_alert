@@ -12,7 +12,6 @@ pub struct Config {
 pub struct General {
 	pub discord_token: String,
 	pub prefix: String,
-	pub class_registry_save_location: String,
 }
 
 impl Config {
@@ -41,13 +40,11 @@ mod tests {
 		[general]
 		discord_token = 'test_token'
 		prefix = '-'
-		class_registry_save_location = './class_registry.json'
 		";
 
 		let config = super::Config::from_str(config_str);
 
 		assert_eq!(config.general.discord_token, "test_token");
 		assert_eq!(config.general.prefix, "-");
-		assert_eq!(config.general.class_registry_save_location, "./class_registry.json");
 	}
 }

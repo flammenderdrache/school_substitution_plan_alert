@@ -12,10 +12,10 @@ use log::{debug, error, info, LevelFilter, trace};
 use simple_logger::SimpleLogger;
 use uuid::Uuid;
 
+use crate::config::Config;
 use crate::discord::DiscordNotifier;
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
-use crate::config::Config;
 
 mod substitution_schedule;
 mod tabula_json_parser;
@@ -25,6 +25,7 @@ mod config;
 
 const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
+const USER_AND_CLASSES_SAVE_LOCATION: &str = "./class_registry.json";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

@@ -24,6 +24,7 @@ use sqlx::{Pool, Sqlite};
 
 use crate::substitution_pdf_getter::Weekdays;
 use crate::config::Config;
+use crate::USER_AND_CLASSES_SAVE_LOCATION;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -37,9 +38,7 @@ impl ClassesAndUsers {
 		}
 	}
 
-	pub fn new_from_file() -> Self {
-		let path = std::env::var("USER_CLASSES_SAVE_LOCATION").expect("Couldn't find the save file location in the environment");
-		let path = Path::new(&path);
+	pub fn new_from_file(path: &Path) -> Self {
 		if !path.exists() {
 			return Self::default();
 		}
@@ -54,8 +53,7 @@ impl ClassesAndUsers {
 	}
 
 	//TODO make function Async and use Tokio async file operations
-	pub fn write_to_file(&self) {
-		let path = std::env::var("USER_CLASSES_SAVE_LOCATION").expect("Couldn't find the save file location in the environment");
+	pub fn write_to_file(&self, path: &Path) {
 		let mut file = std::fs::OpenOptions::new()
 			.write(true)
 			.create(true)
@@ -69,17 +67,17 @@ impl ClassesAndUsers {
 	}
 
 	#[allow(clippy::or_fun_call)]
-	pub fn insert_user(&mut self, class: String, user_id: u64) {
+	pub fn insert_user(&mut self, class: String, user_id: u64, user_and_classes_save_location: &Path) {
 		self.
 			classes_and_users
 			.entry(class)
 			.or_insert(HashSet::new())
 			.insert(user_id);
-		self.write_to_file();
+		self.write_to_file(user_and_classes_save_location);
 	}
 
 	//maybe return result instead of bool
-	pub fn remove_user_from_class(&mut self, class: &str, user_id: u64) -> bool {
+	pub fn remove_user_from_class(&mut self, class: &str, user_id: u64, user_and_classes_save_location: &Path) -> bool {
 		debug!("Class for user {} is {}", class, &user_id);
 		let mut successful = false;
 		if let Some(class_users) = self.classes_and_users.get_mut(class) {
@@ -88,7 +86,7 @@ impl ClassesAndUsers {
 				self.classes_and_users.remove(class);
 			}
 		}
-		self.write_to_file();
+		self.write_to_file(user_and_classes_save_location);
 
 		successful
 	}
@@ -166,7 +164,7 @@ impl DiscordNotifier {
 		{
 			let mut data = client.data.write().await;
 			data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
-			data.insert::<ClassesAndUsers>(ClassesAndUsers::new_from_file());
+			data.insert::<ClassesAndUsers>(ClassesAndUsers::new_from_file(Path::new(USER_AND_CLASSES_SAVE_LOCATION)));
 			data.insert::<Config>(config);
 		}
 
@@ -244,7 +242,7 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-	classes_and_users.insert_user(class.clone(), user);
+	classes_and_users.insert_user(class.clone(), user, Path::new(USER_AND_CLASSES_SAVE_LOCATION));
 
 	msg.reply_ping(&ctx.http, format!(
 		"Registered you for class {}.\n \
@@ -298,7 +296,7 @@ async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-	let success = classes_and_users.remove_user_from_class(class.as_str(), user);
+	let success = classes_and_users.remove_user_from_class(class.as_str(), user, Path::new(USER_AND_CLASSES_SAVE_LOCATION));
 	if !success {
 		msg.reply_ping(&ctx.http, "An error occurred adding you to the class notifications").await?;
 	}
