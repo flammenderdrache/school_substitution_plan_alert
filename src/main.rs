@@ -12,6 +12,7 @@ use log::{debug, error, info, LevelFilter, trace};
 use simple_logger::SimpleLogger;
 use uuid::Uuid;
 
+use crate::config::Config;
 use crate::discord::DiscordNotifier;
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
@@ -20,9 +21,11 @@ mod substitution_schedule;
 mod tabula_json_parser;
 mod substitution_pdf_getter;
 mod discord;
+mod config;
 
 const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
+const USER_AND_CLASSES_SAVE_LOCATION: &str = "./class_registry.json";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,21 +35,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.init()
 		.unwrap();
 
-	//Load the environment variables from the .env file
-	dotenv::dotenv().expect("Failed to load env file");
-
 	// Make sure the paths we want to use exist
 	std::fs::create_dir_all(TEMP_ROOT_DIR)?;
 	std::fs::create_dir_all(PDF_JSON_ROOT_DIR)?;
 
-	let mut counter: u32 = 0;
+	let config_file = std::fs::File::open("./config.toml").expect("Error opening config file");
+	let config = Config::new_from_file(config_file);
+
+	let discord_notifier = Arc::from(discord::DiscordNotifier::new(config).await);
 
 	let pdf_getter = Arc::new(SubstitutionPDFGetter::default());
 
-	let token = std::env::var("DISCORD_TOKEN").expect("Couldn't find the discord token in environment");
-	let prefix = std::env::var("PREFIX").expect("Couldn't find the prefix in environment");
-	let discord_notifier = Arc::from(discord::DiscordNotifier::new(token.as_str(), prefix.as_str()).await);
-
+	let mut counter: u32 = 0;
 	info!("Starting loop");
 	loop {
 		trace!("Loop start");
