@@ -22,8 +22,8 @@ use serenity::http::Http;
 use serenity::model::prelude::{Activity, OnlineStatus, Ready, UserId};
 use sqlx::{Pool, Sqlite};
 
-use crate::substitution_pdf_getter::Weekdays;
 use crate::config::Config;
+use crate::substitution_pdf_getter::Weekdays;
 use crate::USER_AND_CLASSES_SAVE_LOCATION;
 
 #[derive(Serialize, Deserialize)]
@@ -415,12 +415,12 @@ fn sanitize_and_check_register_class_input(input: &str) -> Result<String, Box<dy
 	let input = input.replace('.', "");
 
 	if input.len() < 4 {
-		return Err("Argument too short".into())
+		return Err("Argument too short".into());
 	}
 
 	if !(input.contains(char::is_alphabetic) &&
-		input.contains(char::is_ascii_digit)) {
-		return Err("Argument is incorrectly formatted".into())
+		input.contains(|c: char| c.is_ascii_digit())) {
+		return Err("Argument is incorrectly formatted".into());
 	}
 
 	let input = input.to_uppercase();
@@ -432,6 +432,7 @@ fn sanitize_and_check_register_class_input(input: &str) -> Result<String, Box<dy
 #[cfg(test)]
 mod tests {
 	use super::*;
+
 	#[test]
 	fn test_sanitize_should_pass() {
 		let test_class = "BGYM191";
