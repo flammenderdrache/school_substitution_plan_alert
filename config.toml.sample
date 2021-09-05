@@ -1,0 +1,3 @@
+[general]
+discord_token = 'YOUR TOKEN HERE'
+prefix = '-'
