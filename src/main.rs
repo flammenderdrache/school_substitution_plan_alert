@@ -8,10 +8,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{Datelike, DateTime, Local};
-use log::LevelFilter;
+use log::{debug, error, info, LevelFilter, trace};
 use simple_logger::SimpleLogger;
 use uuid::Uuid;
 
+use crate::config::Config;
 use crate::discord::DiscordNotifier;
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
@@ -20,9 +21,11 @@ mod substitution_schedule;
 mod tabula_json_parser;
 mod substitution_pdf_getter;
 mod discord;
+mod config;
 
 const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
+const USER_AND_CLASSES_SAVE_LOCATION: &str = "./class_registry.json";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,37 +35,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.init()
 		.unwrap();
 
-	//Load the environment variables from the .env file
-	dotenv::dotenv().expect("Failed to load env file");
-
 	// Make sure the paths we want to use exist
 	std::fs::create_dir_all(TEMP_ROOT_DIR)?;
 	std::fs::create_dir_all(PDF_JSON_ROOT_DIR)?;
 
-	let mut counter: u32 = 0;
+	let config_file = std::fs::File::open("./config.toml").expect("Error opening config file");
+	let config = Config::from_file(config_file);
+
+	let discord_notifier = Arc::from(discord::DiscordNotifier::new(config).await);
 
 	let pdf_getter = Arc::new(SubstitutionPDFGetter::default());
 
-	let token = std::env::var("DISCORD_TOKEN").expect("Couldn't find the discord token in environment");
-	let prefix = std::env::var("PREFIX").expect("Couldn't find the prefix in environment");
-	let discord_notifier = Arc::from(discord::DiscordNotifier::new(token.as_str(), prefix.as_str()).await);
-
-	log::info!("Starting loop");
+	let mut counter: u32 = 0;
+	info!("Starting loop");
 	loop {
-		log::trace!("Loop start");
+		trace!("Loop start");
 
 		let local: DateTime<Local> = Local::now();
 		let next_valid_school_weekday = Weekdays::from(local.weekday());
 		let day_after = next_valid_school_weekday.next_day();
 
-		log::debug!("Local day: {}; next valid school day: {}; day after that: {}", local.weekday(), next_valid_school_weekday, day_after);
+		debug!("Local day: {}; next valid school day: {}; day after that: {}", local.weekday(), next_valid_school_weekday, day_after);
 
 
 		let pdf_getter_arc = pdf_getter.clone();
 		let discord_notifier_arc = discord_notifier.clone();
 		tokio::spawn(async move {
 			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter_arc, discord_notifier_arc).await {
-				log::error!("{}", why);
+				error!("{}", why);
 			}
 		});
 
@@ -70,23 +70,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		let discord_notifier_arc = discord_notifier.clone();
 		tokio::spawn(async move {
 			if let Err(why) = check_weekday_pdf(day_after, pdf_getter_arc, discord_notifier_arc).await {
-				log::error!("{}", why);
+				error!("{}", why);
 			}
 		});
 
 		counter += 1;
-		log::debug!("Loop ran {} times", counter);
-		log::trace!("Loop end before sleep");
+		debug!("Loop ran {} times", counter);
+		trace!("Loop end before sleep");
 		tokio::time::sleep(Duration::from_secs(20)).await;
 	}
 }
 
 async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>) -> Result<(), Box<dyn std::error::Error>> {
-	log::info!("Checking PDF for {}", day);
+	info!("Checking PDF for {}", day);
 	let temp_dir_path = make_temp_dir();
 	let temp_file_name = get_random_name();
 	let temp_file_path = format!("{}/{}", temp_dir_path, temp_file_name);
-
 	let temp_file_path = Path::new(&temp_file_path);
 
 	let pdf = pdf_getter.get_weekday_pdf(day).await?;
@@ -95,7 +94,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
 	let classes = discord.get_classes().await;
 
-	//This is only still here to test the new loop. Will be removed at the next version
+	//This is only still here while testing the new loop. Will be removed at the next version
 	// for class in classes {
 	// 	if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
 	// 		if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
@@ -122,8 +121,8 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 			match serde_json::from_reader(old_schedule_json) {
 				Ok(old_schedule) => { Some(old_schedule) }
 				Err(why) => {
-					log::error!("{}", why);
-					panic!("Error opening or parsing the old json");
+					error!("{}", why);
+					panic!("Error parsing the old json");
 				}
 			}
 		} else {
@@ -150,6 +149,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let mut substitution_file = OpenOptions::new()
 		.write(true)
 		.create(true)
+		.truncate(true)
 		.open(format!("{}/{}.json", PDF_JSON_ROOT_DIR, day))
 		.expect("Couldn't open file to write new json");
 
@@ -161,12 +161,12 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 }
 
 fn get_random_name() -> String {
-	log::trace!("Returning random name");
+	trace!("Returning random name");
 	format!("{}", Uuid::new_v4())
 }
 
 fn make_temp_dir() -> String {
-	log::trace!("Creating temp directory");
+	trace!("Creating temp directory");
 	let temp_dir_name = get_random_name();
 	let temp_dir = format!("{}/{}", TEMP_ROOT_DIR, temp_dir_name);
 	std::fs::create_dir(Path::new(&temp_dir)).expect("Could not create temp dir");

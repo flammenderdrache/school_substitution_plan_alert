@@ -114,7 +114,7 @@ impl SubstitutionSchedule {
 			.duration_since(SystemTime::UNIX_EPOCH)
 			.expect("Time got fucked");
 		#[allow(clippy::cast_possible_truncation)]
-		let time_millis = since_the_epoch.as_millis() as u64;
+			let time_millis = since_the_epoch.as_millis() as u64;
 
 		Self {
 			pdf_create_date,
@@ -139,7 +139,7 @@ impl SubstitutionSchedule {
 			.collect();
 
 		#[allow(clippy::cast_possible_wrap)]
-		let date = chrono::Date::<Local>::from_utc(
+			let date = chrono::Date::<Local>::from_utc(
 			NaiveDate::from_ymd(date_str[2] as i32, date_str[1], date_str[0]),
 			Utc.fix(),
 		).and_hms(0, 0, 0).timestamp();
