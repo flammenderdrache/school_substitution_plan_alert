@@ -130,19 +130,19 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 		}
 	};
 
-	for class in classes {
-		if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
-			if let Some(old_schedule) = &old_schedule {
-				if let Some(old_substitutions) = old_schedule.get_substitutions(class.as_str()) {
-					if new_substitutions != old_substitutions {
-						discord.notify_users_for_class(class.as_str(), day).await?;
-					}
-				}
-			} else {
-				discord.notify_users_for_class(class.as_str(), day).await?;
-			}
-		}
-	}
+	// TODO let notify_users_for_classes take a hashmap which only includes the affected classes
+	// TODO implement the notification invocation
+	// if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
+	// 	if let Some(old_schedule) = &old_schedule {
+	// 		if let Some(old_substitutions) = old_schedule.get_substitutions(class.as_str()) {
+	// 			if new_substitutions != old_substitutions {
+	// 				discord.notify_users_for_class(day, classes).await?;
+	// 			}
+	// 		}
+	// 	} else {
+	// 		discord.notify_users_for_class(day, classes).await?;
+	// 	}
+	// }
 
 
 	let new_substitution_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");

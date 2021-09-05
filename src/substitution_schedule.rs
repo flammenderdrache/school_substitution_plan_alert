@@ -11,39 +11,61 @@ use lopdf::Document;
 use serde::{Deserialize, Serialize};
 
 use crate::tabula_json_parser::parse;
+use std::ops::Range;
 
 #[derive(Serialize, Deserialize, PartialOrd, PartialEq)]
 pub struct Substitutions {
 	#[serde(rename(serialize = "0"))]
 	#[serde(rename(deserialize = "0"))]
-	pub block_0: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_0: Option<String>,
 	#[serde(rename(serialize = "1"))]
 	#[serde(rename(deserialize = "1"))]
-	pub block_1: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_1: Option<String>,
 	#[serde(rename(serialize = "2"))]
 	#[serde(rename(deserialize = "2"))]
-	pub block_2: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_2: Option<String>,
 	#[serde(rename(serialize = "3"))]
 	#[serde(rename(deserialize = "3"))]
-	pub block_3: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_3: Option<String>,
 	#[serde(rename(serialize = "4"))]
 	#[serde(rename(deserialize = "4"))]
-	pub block_4: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_4: Option<String>,
 	#[serde(rename(serialize = "5"))]
 	#[serde(rename(deserialize = "5"))]
-	pub block_5: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_5: Option<String>,
 }
 
 impl Substitutions {
 	pub fn new() -> Self {
 		Self {
-			block_0: "".to_string(),
-			block_1: "".to_string(),
-			block_2: "".to_string(),
-			block_3: "".to_string(),
-			block_4: "".to_string(),
-			block_5: "".to_string(),
+			block_0: None,
+			block_1: None,
+			block_2: None,
+			block_3: None,
+			block_4: None,
+			block_5: None
 		}
+	}
+}
+
+impl Substitutions {
+	pub fn first_substitution(&self) -> usize {
+		self.as_array().iter().position(|b: Option<String>| b.is_some()).unwrap_or(0)
+	}
+
+	pub fn last_substitution(&self) -> usize {
+		self.as_array().iter().rposition(|b: Option<String>| b.is_some()).unwrap_or(0)
+	}
+
+	pub fn as_array(&self) -> [&Option<String>; 6] {
+		// One could consider also implementing Iterator
+		[&self.block_0, &self.block_1, &self.block_2, &self.block_3, &self.block_4, &self.block_5]
 	}
 }
 
@@ -92,10 +114,10 @@ impl SubstitutionSchedule {
 					};
 
 					if !substitution_part.is_empty() {
-						if block.is_empty() {
-							block.push_str(substitution_part);
+						if block.is_none() {
+							block.insert(substitution_part.clone());
 						} else {
-							block.push_str(&format!("\n{}", substitution_part.clone()));
+							block.unwrap().push_str(&format!("\n{}", substitution_part.clone()));
 						}
 					}
 				}
@@ -161,6 +183,28 @@ impl SubstitutionSchedule {
 	pub fn get_substitutions(&self, class: &str) -> Option<&Substitutions> {
 		self.entries.get(class)
 	}
+
+	pub fn get_entries(&self) -> &HashMap<String, Substitutions> { &self.entries }
+
+	// pub fn get_entries_for_classes(&self, classes: &Vec<String>) -> Result<Box<[(&String, &Substitutions)]>, Box<dyn std::error::Error >> {
+	// 	let mut portion: Box<[(&String, &Substitutions)]> = vec![(&String, &Substitutions); classes.len()].into_boxed_slice();
+	//
+	// 	for i in 0..classes.len() {
+	// 		portion[i] = (class[i], self.entries.get(class)?);
+	// 	}
+	//
+	// 	Ok(portion)
+	// }
+
+	// pub fn get_entries_portion(&self, classes: &Vec<String>) -> Result<HashMap<&String, &Substitutions>, Box<dyn std::error::Error >> {
+	// 	let mut portion = HashMap::new();
+	//
+	// 	for class in classes {
+	// 		portion.insert(class, self.entries.get(class)?);
+	// 	}
+	//
+	// 	Ok(portion)
+	// }
 }
 
 impl Display for SubstitutionSchedule {

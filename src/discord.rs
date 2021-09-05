@@ -25,6 +25,9 @@ use sqlx::{Pool, Sqlite};
 use crate::config::Config;
 use crate::substitution_pdf_getter::Weekdays;
 use crate::USER_AND_CLASSES_SAVE_LOCATION;
+use crate::substitution_schedule::Substitutions;
+use prettytable::{Table, Row, Cell};
+use prettytable::format::consts::FORMAT_BOX_CHARS;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -76,7 +79,6 @@ impl ClassesAndUsers {
 		self.write_to_file(user_and_classes_save_location);
 	}
 
-	//maybe return result instead of bool
 	pub fn remove_user_from_class(&mut self, class: &str, user_id: u64, user_and_classes_save_location: &Path) -> bool {
 		debug!("Class for user {} is {}", class, &user_id);
 		let mut successful = false;
@@ -110,6 +112,25 @@ impl ClassesAndUsers {
 			classes.push(class.clone());
 		}
 		classes
+	}
+
+	pub fn to_inside_out(&self) -> HashMap<u64, HashSet<&String>> {
+		let mut inside_out: HashMap<u64, HashSet<&String>> = HashMap::new();
+
+		for (class, users) in self.classes_and_users {
+			for user in users {
+				if let Some(mut classes) = inside_out.get(&user) {
+					classes.insert(&class)
+				} else {
+					let mut classes = HashSet::new();
+					classes.insert(&class);
+
+					inside_out.insert(user, classes);
+				}
+			}
+		}
+
+		inside_out
 	}
 }
 
@@ -185,24 +206,82 @@ impl DiscordNotifier {
 		}
 	}
 
-	pub async fn notify_users_for_class(&self, class: &str, day: Weekdays) -> Result<(), serenity::Error> {
-		info!("Notifying all users in class {} on day {}", class, day);
+	pub async fn notify_users_for_classes(&self, day: Weekdays, substitutions: &HashMap<String, Substitutions>) -> Result<(), serenity::Error> {
+		//FIXME remove debug operator in log format.
+		info!("Notifying all users for substitutions on day {}. These classes are affected: {:?}", day, substitutions.keys());
 
 		let data = self.data.read().await;
-		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
+		let users_and_classes = data.get::<ClassesAndUsers>().unwrap().to_inside_out();
 
-		for user in classes_and_users.classes_and_users.get(class).unwrap() {
+		for (user, classes) in users_and_classes {
+			let mut affected: HashMap<&String, &Substitutions> = HashMap::new();
+
+			for class in classes {
+				if let Some(affected_substitution) = substitutions.get(class) {
+					affected.insert(class, affected_substitution)
+				}
+			}
+
 			let user = UserId::from(*user);
 			let dm_channel = user.create_dm_channel(&self.http).await?;
 			dm_channel.say(&self.http, format!(
-				"There is a change in schedule on {} for class {}",
+				"There are changes in schedule on {}: ```\n{}\n```",
 				day,
-				class,
+				Self::table_from_substitutions(&affected),
 			),
-			).await?;//TODO refine, send the link to the corresponding day maybe too etc.
+			).await?;
 		}
 
 		Ok(())
+	}
+
+	fn table_from_substitutions(substitutions: &HashMap<&String, &Substitutions>) -> Table {
+		let hour_marks = [
+			"0: 07:15\n - 08:00",
+			"1: 08:00\n - 09:30",
+			"2: 09:50\n - 11:20",
+			"3: 11:40\n - 13:10",
+			"4: 13:30\n - 15:00",
+			"5: 15:15\n - 16:45"
+		];
+
+		let first = substitutions.values()
+			.map(|s| s.first_substitution())
+			.min()
+			.unwrap(); // first_substitution guarantees that there is atlas 1 element
+
+		let last = substitutions.values()
+			.map(|s| s.last_substitution())
+			.max()
+			.unwrap(); // last_substitution guarantees that there is atlas 1 element
+
+		//FIXME replace table creation with table builder.
+		let first_column = hour_marks[first..last].iter()
+			.map(|r| {
+				Row::new(vec![Cell::new(r)])
+			})
+			.collect::<Vec<Row>>();
+
+		let mut table = Table::init(first_column);
+		table.insert(0, Row::new(vec![Cell::new("")]));
+		table.set_format(*FORMAT_BOX_CHARS);
+
+		for (class, substitution) in substitutions {
+			let substitution_array = substitution.as_array();
+
+			table.get_mut_row(0).unwrap().add_cell(Cell::new(class));
+
+			for i in 0..substitution_array.len() {
+				let row = table.get_mut_row(i - first + 1).unwrap();
+				if let Some(block) = substitution_array[i] {
+					row.add_cell(Cell::new(block));
+				} else {
+					row.add_cell(Cell::new(""));
+				}
+			}
+		}
+
+		table
 	}
 
 	pub async fn get_classes(&self) -> Vec<String> {
