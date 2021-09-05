@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	std::fs::create_dir_all(PDF_JSON_ROOT_DIR)?;
 
 	let config_file = std::fs::File::open("./config.toml").expect("Error opening config file");
-	let config = Config::new_from_file(config_file);
+	let config = Config::from_file(config_file);
 
 	let discord_notifier = Arc::from(discord::DiscordNotifier::new(config).await);
 
