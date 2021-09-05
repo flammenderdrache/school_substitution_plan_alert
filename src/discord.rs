@@ -144,7 +144,7 @@ impl DiscordNotifier {
 				.on_mention(Some(UserId::from(881938899876868107)))
 				.prefix(config.general.prefix.as_str())
 				.delimiters(vec![", ", ",", " "])
-				.owners(owners)
+				.owners(config.general.owners.clone())
 			)
 			.before(before)
 			.after(after)

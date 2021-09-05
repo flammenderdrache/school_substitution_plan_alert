@@ -2,6 +2,8 @@ use std::fs::File;
 use serde::Deserialize;
 use std::io::Read;
 use serenity::prelude::TypeMapKey;
+use serenity::model::prelude::UserId;
+use std::collections::HashSet;
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -12,6 +14,7 @@ pub struct Config {
 pub struct General {
 	pub discord_token: String,
 	pub prefix: String,
+	pub owners: HashSet<UserId>,
 }
 
 impl Config {
@@ -40,6 +43,7 @@ mod tests {
 		[general]
 		discord_token = 'test_token'
 		prefix = '-'
+		owners = [191594115907977225, 276431762815451138]
 		";
 
 		let config = super::Config::from_str(config_str);
