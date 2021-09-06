@@ -214,22 +214,19 @@ impl DiscordNotifier {
 		let users_and_classes = data.get::<ClassesAndUsers>().unwrap().to_inside_out();
 
 		for (user, classes) in users_and_classes {
-			//TODO remove the extra filtering
 			let user = UserId::from(user);
 			let dm_channel = user.create_dm_channel(&self.http).await?;
 			dm_channel.say(&self.http, format!(
 				"There are changes in schedule on {}: ```\n{}\n```",
 				day,
-				//TODO HERE
-				Self::table_from_substitutions(substitutions.g),
-			),
-			).await?;
+				Self::table_from_substitutions(&substitutions.get_entries_portion(&classes)),
+			),).await?;
 		}
 
 		Ok(())
 	}
 
-	fn table_from_substitutions(substitutions: &HashMap<&String, &Substitutions>) -> Table {
+	fn table_from_substitutions(substitutions: &HashMap<String, &Substitutions>) -> Table {
 		let hour_marks = [
 			"0: 07:15\n - 08:00",
 			"1: 08:00\n - 09:30",
@@ -249,6 +246,8 @@ impl DiscordNotifier {
 			.max()
 			.unwrap(); // last_substitution guarantees that there is atlas 1 element
 
+		println!("{}, {}", first, last);
+
 		//FIXME replace table creation with table builder.
 		let first_column = hour_marks[first..last].iter()
 			.map(|r| {
@@ -265,9 +264,10 @@ impl DiscordNotifier {
 
 			table.get_mut_row(0).unwrap().add_cell(Cell::new(class));
 
-			for i in 0..substitution_array.len() {
-				let row = table.get_mut_row(i - first + 1).unwrap();
-				if let Some(block) = substitution_array[i] {
+			for i in 1..(last - first) {
+				table.printstd();
+				let row = table.get_mut_row(i).unwrap();
+				if let Some(block) = substitution_array[first + i] {
 					row.add_cell(Cell::new(block));
 				} else {
 					row.add_cell(Cell::new(""));

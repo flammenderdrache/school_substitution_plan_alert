@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
@@ -183,25 +183,15 @@ impl SubstitutionSchedule {
 
 	pub fn get_entries(&self) -> &HashMap<String, Substitutions> { &self.entries }
 
-	// pub fn get_entries_for_classes(&self, classes: &Vec<String>) -> Result<Box<[(&String, &Substitutions)]>, Box<dyn std::error::Error >> {
-	// 	let mut portion: Box<[(&String, &Substitutions)]> = vec![(&String, &Substitutions); classes.len()].into_boxed_slice();
-	//
-	// 	for i in 0..classes.len() {
-	// 		portion[i] = (class[i], self.entries.get(class)?);
-	// 	}
-	//
-	// 	Ok(portion)
-	// }
+	pub fn get_entries_portion(&self, classes: &HashSet<&String>) -> HashMap<String, &Substitutions> {
+		let mut portion = HashMap::new();
 
-	// pub fn get_entries_portion(&self, classes: &Vec<String>) -> Result<HashMap<&String, &Substitutions>, Box<dyn std::error::Error >> {
-	// 	let mut portion = HashMap::new();
-	//
-	// 	for class in classes {
-	// 		portion.insert(class, self.entries.get(class)?);
-	// 	}
-	//
-	// 	Ok(portion)
-	// }
+		for class in classes {
+			portion.insert(class.clone().to_owned(), self.entries.get(*class).unwrap());
+		}
+
+		portion
+	}
 }
 
 impl Display for SubstitutionSchedule {
