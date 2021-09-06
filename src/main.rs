@@ -111,7 +111,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	// }
 
 	//Open and parse the json file first, instead of at each iteration in the loop
-	let old_schedule: Option<SubstitutionSchedule> = {
+	let old_schedule_option: Option<SubstitutionSchedule> = {
 		let old_json_file = std::fs::OpenOptions::new()
 			.read(true)
 			.write(false)
@@ -130,20 +130,13 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 		}
 	};
 
-	// TODO let notify_users_for_classes take a hashmap which only includes the affected classes
-	// TODO implement the notification invocation
-	// if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
-	// 	if let Some(old_schedule) = &old_schedule {
-	// 		if let Some(old_substitutions) = old_schedule.get_substitutions(class.as_str()) {
-	// 			if new_substitutions != old_substitutions {
-	// 				discord.notify_users_for_class(day, classes).await?;
-	// 			}
-	// 		}
-	// 	} else {
-	// 		discord.notify_users_for_class(day, classes).await?;
-	// 	}
-	// }
-
+	if let Some(old_schedule) = old_schedule_option {
+		if !new_schedule.get_entries().keys().all(|k| old_schedule.get_entries().contains_key(k)) {
+			discord.notify_users_for_classes(day, &new_schedule).await?;
+		}
+	} else {
+		discord.notify_users_for_classes(day, &new_schedule).await?;
+	}
 
 	let new_substitution_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
 	let mut substitution_file = OpenOptions::new()

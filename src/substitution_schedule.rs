@@ -52,15 +52,12 @@ impl Substitutions {
 			block_5: None
 		}
 	}
-}
-
-impl Substitutions {
 	pub fn first_substitution(&self) -> usize {
-		self.as_array().iter().position(|b: Option<String>| b.is_some()).unwrap_or(0)
+		self.as_array().iter().position(|b| b.is_some()).unwrap_or(0)
 	}
 
 	pub fn last_substitution(&self) -> usize {
-		self.as_array().iter().rposition(|b: Option<String>| b.is_some()).unwrap_or(0)
+		self.as_array().iter().rposition(|b| b.is_some()).unwrap_or(0)
 	}
 
 	pub fn as_array(&self) -> [&Option<String>; 6] {
@@ -103,7 +100,7 @@ impl SubstitutionSchedule {
 				for (i, substitution_part) in table[row][1..].iter().enumerate() {
 					let substitutions = entries.get_mut(&classes[i]).unwrap();
 
-					let block = match lesson_idx {
+					let block_opt = match lesson_idx {
 						0 => &mut substitutions.block_0,
 						1 => &mut substitutions.block_1,
 						2 => &mut substitutions.block_2,
@@ -114,10 +111,10 @@ impl SubstitutionSchedule {
 					};
 
 					if !substitution_part.is_empty() {
-						if block.is_none() {
-							block.insert(substitution_part.clone());
+						if let Some(block) = block_opt  {
+							block.push_str(&format!("\n{}", substitution_part.clone()));
 						} else {
-							block.unwrap().push_str(&format!("\n{}", substitution_part.clone()));
+							block_opt.insert(substitution_part.clone());
 						}
 					}
 				}

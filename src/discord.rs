@@ -25,7 +25,7 @@ use sqlx::{Pool, Sqlite};
 use crate::config::Config;
 use crate::substitution_pdf_getter::Weekdays;
 use crate::USER_AND_CLASSES_SAVE_LOCATION;
-use crate::substitution_schedule::Substitutions;
+use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
 use prettytable::{Table, Row, Cell};
 use prettytable::format::consts::FORMAT_BOX_CHARS;
 
@@ -117,15 +117,15 @@ impl ClassesAndUsers {
 	pub fn to_inside_out(&self) -> HashMap<u64, HashSet<&String>> {
 		let mut inside_out: HashMap<u64, HashSet<&String>> = HashMap::new();
 
-		for (class, users) in self.classes_and_users {
+		for (class, users) in &self.classes_and_users {
 			for user in users {
-				if let Some(mut classes) = inside_out.get(&user) {
-					classes.insert(&class)
+				if let Some(mut classes) = inside_out.get_mut(&user) {
+					classes.insert(&class);
 				} else {
-					let mut classes = HashSet::new();
+					let mut classes: HashSet<&String> = HashSet::new();
 					classes.insert(&class);
 
-					inside_out.insert(user, classes);
+					inside_out.insert(*user, classes);
 				}
 			}
 		}
@@ -206,28 +206,22 @@ impl DiscordNotifier {
 		}
 	}
 
-	pub async fn notify_users_for_classes(&self, day: Weekdays, substitutions: &HashMap<String, Substitutions>) -> Result<(), serenity::Error> {
+	pub async fn notify_users_for_classes(&self, day: Weekdays, substitutions: &SubstitutionSchedule) -> Result<(), serenity::Error> {
 		//FIXME remove debug operator in log format.
-		info!("Notifying all users for substitutions on day {}. These classes are affected: {:?}", day, substitutions.keys());
+		info!("Notifying all users for substitutions on day {}. These classes are affected: {:?}", day, substitutions.get_entries().keys());
 
 		let data = self.data.read().await;
 		let users_and_classes = data.get::<ClassesAndUsers>().unwrap().to_inside_out();
 
 		for (user, classes) in users_and_classes {
-			let mut affected: HashMap<&String, &Substitutions> = HashMap::new();
-
-			for class in classes {
-				if let Some(affected_substitution) = substitutions.get(class) {
-					affected.insert(class, affected_substitution)
-				}
-			}
-
-			let user = UserId::from(*user);
+			//TODO remove the extra filtering
+			let user = UserId::from(user);
 			let dm_channel = user.create_dm_channel(&self.http).await?;
 			dm_channel.say(&self.http, format!(
 				"There are changes in schedule on {}: ```\n{}\n```",
 				day,
-				Self::table_from_substitutions(&affected),
+				//TODO HERE
+				Self::table_from_substitutions(substitutions.g),
 			),
 			).await?;
 		}
@@ -263,7 +257,7 @@ impl DiscordNotifier {
 			.collect::<Vec<Row>>();
 
 		let mut table = Table::init(first_column);
-		table.insert(0, Row::new(vec![Cell::new("")]));
+		table.insert_row(0, Row::new(vec![Cell::new("")]));
 		table.set_format(*FORMAT_BOX_CHARS);
 
 		for (class, substitution) in substitutions {
