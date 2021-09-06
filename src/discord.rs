@@ -25,6 +25,9 @@ use sqlx::{Pool, Sqlite};
 use crate::config::Config;
 use crate::substitution_pdf_getter::Weekdays;
 use crate::USER_AND_CLASSES_SAVE_LOCATION;
+use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
+use prettytable::{Table, Row, Cell};
+use prettytable::format::consts::FORMAT_BOX_CHARS;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -76,7 +79,6 @@ impl ClassesAndUsers {
 		self.write_to_file(user_and_classes_save_location);
 	}
 
-	//maybe return result instead of bool
 	pub fn remove_user_from_class(&mut self, class: &str, user_id: u64, user_and_classes_save_location: &Path) -> bool {
 		debug!("Class for user {} is {}", class, &user_id);
 		let mut successful = false;
@@ -110,6 +112,20 @@ impl ClassesAndUsers {
 			classes.push(class.clone());
 		}
 		classes
+	}
+
+	pub fn to_inside_out(&self) -> HashMap<u64, HashSet<&String>> {
+		let mut inside_out: HashMap<u64, HashSet<&String>> = HashMap::new();
+
+		for (class, users) in &self.classes_and_users {
+			for user in users {
+				inside_out.entry(*user)
+					.or_insert(HashSet::new())
+					.insert(&class);
+			}
+		}
+
+		inside_out
 	}
 }
 
@@ -185,24 +201,79 @@ impl DiscordNotifier {
 		}
 	}
 
-	pub async fn notify_users_for_class(&self, class: &str, day: Weekdays) -> Result<(), serenity::Error> {
-		info!("Notifying all users in class {} on day {}", class, day);
+	pub async fn notify_users_for_classes(&self, day: Weekdays, substitutions: &SubstitutionSchedule) -> Result<(), serenity::Error> {
+		info!("Notifying all users on day {}. Affected classes: {}",
+			day,
+			substitutions.get_entries()
+				.keys()
+				.map(|s| format!(", {}", s))
+				.collect::<String>()
+				.split_at(2).1 // removes ", " at the beginning
+		);
 
 		let data = self.data.read().await;
-		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
+		let users_and_classes = data.get::<ClassesAndUsers>().unwrap().to_inside_out();
 
-		for user in classes_and_users.classes_and_users.get(class).unwrap() {
-			let user = UserId::from(*user);
+		for (user, classes) in users_and_classes {
+			let user = UserId::from(user);
 			let dm_channel = user.create_dm_channel(&self.http).await?;
 			dm_channel.say(&self.http, format!(
-				"There is a change in schedule on {} for class {}",
+				"There are changes in schedule on {}: ```\n{}\n```",
 				day,
-				class,
-			),
-			).await?;//TODO refine, send the link to the corresponding day maybe too etc.
+				Self::table_from_substitutions(&substitutions.get_entries_portion(&classes)),
+			),).await?;
 		}
 
 		Ok(())
+	}
+
+	fn table_from_substitutions(substitutions: &HashMap<String, &Substitutions>) -> Table {
+		let hour_marks = [
+			"0: 07:15\n - 08:00",
+			"1: 08:00\n - 09:30",
+			"2: 09:50\n - 11:20",
+			"3: 11:40\n - 13:10",
+			"4: 13:30\n - 15:00",
+			"5: 15:15\n - 16:45"
+		];
+
+		let first = substitutions.values()
+			.map(|s| s.first_substitution())
+			.min()
+			.unwrap(); // first_substitution guarantees that there is atlas 1 element
+
+		let last = substitutions.values()
+			.map(|s| s.last_substitution())
+			.max()
+			.unwrap(); // last_substitution guarantees that there is atlas 1 element
+
+		//FIXME replace table creation with table builder.
+		let first_column = hour_marks[first..=last].iter()
+			.map(|r| {
+				Row::new(vec![Cell::new(r)])
+			})
+			.collect::<Vec<Row>>();
+
+		let mut table = Table::init(first_column);
+		table.insert_row(0, Row::new(vec![Cell::new("")]));
+		table.set_format(*FORMAT_BOX_CHARS);
+
+		for (class, substitution) in substitutions {
+			let substitution_array = substitution.as_array();
+
+			table.get_mut_row(0).unwrap().add_cell(Cell::new(class));
+
+			for i in first..=last {
+				let row = table.get_mut_row(i - first + 1).unwrap();
+				if let Some(block) = substitution_array[i] {
+					row.add_cell(Cell::new(block));
+				} else {
+					row.add_cell(Cell::new(""));
+				}
+			}
+		}
+
+		table
 	}
 
 	pub async fn get_classes(&self) -> Vec<String> {
@@ -474,5 +545,127 @@ mod tests {
 		let test_class = "BGY/@;19[1";
 		let output = sanitize_and_check_register_class_input(test_class).unwrap();
 		assert_eq!(output, "BGYM191")
+	}
+
+	#[test]
+	fn test_table_generation() {
+		let mut table_map = HashMap::new();
+
+		let mut first = Substitutions::new();
+		first.block_1.insert("ONE".to_owned());
+		first.block_3.insert("THREE".to_owned());
+		first.block_5.insert("FIVE".to_owned());
+		table_map.insert("FIRST".to_owned(), &first);
+
+		let mut second = Substitutions::new();
+		second.block_0.insert("ZERO".to_owned());
+		second.block_1.insert("ONE".to_owned());
+		second.block_2.insert("TWO".to_owned());
+		second.block_3.insert("THREE".to_owned());
+		second.block_4.insert("FOUR".to_owned());
+		second.block_5.insert("FIVE".to_owned());
+		table_map.insert("SECOND".to_owned(), &second);
+
+		let out = DiscordNotifier::table_from_substitutions(&table_map);
+
+		let expected_1 = "\
+		┌──────────┬────────┬───────┐\n\
+		│          │ SECOND │ FIRST │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 0: 07:15 │ ZERO   │       │\n\
+		│  - 08:00 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 1: 08:00 │ ONE    │ ONE   │\n\
+		│  - 09:30 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 2: 09:50 │ TWO    │       │\n\
+		│  - 11:20 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 3: 11:40 │ THREE  │ THREE │\n\
+		│  - 13:10 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 4: 13:30 │ FOUR   │       │\n\
+		│  - 15:00 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 5: 15:15 │ FIVE   │ FIVE  │\n\
+		│  - 16:45 │        │       │\n\
+		└──────────┴────────┴───────┘\n";
+
+		let expected_2 = "\
+		┌──────────┬───────┬────────┐\n\
+		│          │ FIRST │ SECOND │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 0: 07:15 │       │ ZERO   │\n\
+		│  - 08:00 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 1: 08:00 │ ONE   │ ONE    │\n\
+		│  - 09:30 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 2: 09:50 │       │ TWO    │\n\
+		│  - 11:20 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 3: 11:40 │ THREE │ THREE  │\n\
+		│  - 13:10 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 4: 13:30 │       │ FOUR   │\n\
+		│  - 15:00 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 5: 15:15 │ FIVE  │ FIVE   │\n\
+		│  - 16:45 │       │        │\n\
+		└──────────┴───────┴────────┘\n";
+
+		assert!(out.to_string() == expected_1 || out.to_string() == expected_2);
+	}
+
+	#[test]
+	fn test_table_generation_2() {
+		let mut table_map = HashMap::new();
+
+		let mut first = Substitutions::new();
+		first.block_1.insert("ONE".to_owned());
+		first.block_4.insert("FOUR".to_owned());
+		table_map.insert("FIRST".to_owned(), &first);
+
+		let mut second = Substitutions::new();
+		second.block_3.insert("THREE".to_owned());
+		table_map.insert("SECOND".to_owned(), &second);
+
+		let out = DiscordNotifier::table_from_substitutions(&table_map);
+
+		let expected_1 = "\
+		┌──────────┬────────┬───────┐\n\
+		│          │ SECOND │ FIRST │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 1: 08:00 │        │ ONE   │\n\
+		│  - 09:30 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 2: 09:50 │        │       │\n\
+		│  - 11:20 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 3: 11:40 │ THREE  │       │\n\
+		│  - 13:10 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 4: 13:30 │        │ FOUR  │\n\
+		│  - 15:00 │        │       │\n\
+		└──────────┴────────┴───────┘\n";
+
+		let expected_2 = "\
+		┌──────────┬───────┬────────┐\n\
+		│          │ FIRST │ SECOND │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 1: 08:00 │ ONE   │        │\n\
+		│  - 09:30 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 2: 09:50 │       │        │\n\
+		│  - 11:20 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 3: 11:40 │       │ THREE  │\n\
+		│  - 13:10 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 4: 13:30 │ FOUR  │        │\n\
+		│  - 15:00 │       │        │\n\
+		└──────────┴───────┴────────┘\n";
+
+		assert!(out.to_string() == expected_1 || out.to_string() == expected_2);
 	}
 }
