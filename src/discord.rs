@@ -213,7 +213,7 @@ impl DiscordNotifier {
 			substitutions.get_entries()
 				.keys()
 				.map(|s| format!(", {}", s))
-				.collect::<String>()[2..]
+				.collect::<String>()
 		);
 
 		let data = self.data.read().await;
@@ -232,6 +232,7 @@ impl DiscordNotifier {
 		Ok(())
 	}
 
+	//only public because it wouldn't be possible to test it as private
 	fn table_from_substitutions(substitutions: &HashMap<String, &Substitutions>) -> Table {
 		let hour_marks = [
 			"0: 07:15\n - 08:00",
@@ -554,6 +555,123 @@ mod tests {
 
 	#[test]
 	fn test_table_generation() {
-		let table_map =
+		let mut table_map = HashMap::new();
+
+		let mut first = Substitutions::new();
+		first.block_1.insert("ONE".to_owned());
+		first.block_3.insert("THREE".to_owned());
+		first.block_5.insert("FIVE".to_owned());
+		table_map.insert("FIRST".to_owned(), &first);
+
+		let mut second = Substitutions::new();
+		second.block_0.insert("ZERO".to_owned());
+		second.block_1.insert("ONE".to_owned());
+		second.block_2.insert("TWO".to_owned());
+		second.block_3.insert("THREE".to_owned());
+		second.block_4.insert("FOUR".to_owned());
+		second.block_5.insert("FIVE".to_owned());
+		table_map.insert("SECOND".to_owned(), &second);
+
+		let out = DiscordNotifier::table_from_substitutions(&table_map);
+
+		let expected_1 = "\
+		┌──────────┬────────┬───────┐\n\
+		│          │ SECOND │ FIRST │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 0: 07:15 │ ZERO   │       │\n\
+		│  - 08:00 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 1: 08:00 │ ONE    │ ONE   │\n\
+		│  - 09:30 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 2: 09:50 │ TWO    │       │\n\
+		│  - 11:20 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 3: 11:40 │ THREE  │ THREE │\n\
+		│  - 13:10 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 4: 13:30 │ FOUR   │       │\n\
+		│  - 15:00 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 5: 15:15 │ FIVE   │ FIVE  │\n\
+		│  - 16:45 │        │       │\n\
+		└──────────┴────────┴───────┘\n";
+
+		let expected_2 = "\
+		┌──────────┬───────┬────────┐\n\
+		│          │ FIRST │ SECOND │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 0: 07:15 │       │ ZERO   │\n\
+		│  - 08:00 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 1: 08:00 │ ONE   │ ONE    │\n\
+		│  - 09:30 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 2: 09:50 │       │ TWO    │\n\
+		│  - 11:20 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 3: 11:40 │ THREE │ THREE  │\n\
+		│  - 13:10 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 4: 13:30 │       │ FOUR   │\n\
+		│  - 15:00 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 5: 15:15 │ FIVE  │ FIVE   │\n\
+		│  - 16:45 │       │        │\n\
+		└──────────┴───────┴────────┘\n";
+
+		assert!(out.to_string() == expected_1 || out.to_string() == expected_2);
+	}
+
+	#[test]
+	fn test_table_generation_2() {
+		let mut table_map = HashMap::new();
+
+		let mut first = Substitutions::new();
+		first.block_1.insert("ONE".to_owned());
+		first.block_4.insert("FOUR".to_owned());
+		table_map.insert("FIRST".to_owned(), &first);
+
+		let mut second = Substitutions::new();
+		second.block_3.insert("THREE".to_owned());
+		table_map.insert("SECOND".to_owned(), &second);
+
+		let out = DiscordNotifier::table_from_substitutions(&table_map);
+
+		let expected_1 = "\
+		┌──────────┬────────┬───────┐\n\
+		│          │ SECOND │ FIRST │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 1: 08:00 │        │ ONE   │\n\
+		│  - 09:30 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 2: 09:50 │        │       │\n\
+		│  - 11:20 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 3: 11:40 │ THREE  │       │\n\
+		│  - 13:10 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 4: 13:30 │        │ FOUR  │\n\
+		│  - 15:00 │        │       │\n\
+		└──────────┴────────┴───────┘\n";
+
+		let expected_2 = "\
+		┌──────────┬───────┬────────┐\n\
+		│          │ FIRST │ SECOND │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 1: 08:00 │ ONE   │        │\n\
+		│  - 09:30 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 2: 09:50 │       │        │\n\
+		│  - 11:20 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 3: 11:40 │       │ THREE  │\n\
+		│  - 13:10 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 4: 13:30 │ FOUR  │        │\n\
+		│  - 15:00 │       │        │\n\
+		└──────────┴───────┴────────┘\n";
+
+		assert!(out.to_string() == expected_1 || out.to_string() == expected_2);
 	}
 }
