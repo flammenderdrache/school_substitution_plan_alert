@@ -207,13 +207,13 @@ impl DiscordNotifier {
 	}
 
 	pub async fn notify_users_for_classes(&self, day: Weekdays, substitutions: &SubstitutionSchedule) -> Result<(), serenity::Error> {
-		//FIXME remove debug operator in log format.
 		info!("Notifying all users for substitutions on day {}. These classes are affected: {}",
 			day,
 			substitutions.get_entries()
 				.keys()
 				.map(|s| format!(", {}", s))
 				.collect::<String>()
+				.split_at(2).1
 		);
 
 		let data = self.data.read().await;
