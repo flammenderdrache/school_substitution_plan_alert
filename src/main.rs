@@ -131,7 +131,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	};
 
 	if let Some(old_schedule) = old_schedule_option {
-		if !new_schedule.get_entries().keys().all(|k| old_schedule.get_entries().contains_key(k)) {
+		if new_schedule.get_entries() != old_schedule.get_entries() {
 			discord.notify_users_for_classes(day, &new_schedule).await?;
 		}
 	} else {

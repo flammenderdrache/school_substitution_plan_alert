@@ -100,7 +100,7 @@ impl SubstitutionSchedule {
 				for (i, substitution_part) in table[row][1..].iter().enumerate() {
 					let substitutions = entries.get_mut(&classes[i]).unwrap();
 
-					let block_opt = match lesson_idx {
+					let block_option = match lesson_idx {
 						0 => &mut substitutions.block_0,
 						1 => &mut substitutions.block_1,
 						2 => &mut substitutions.block_2,
@@ -111,10 +111,10 @@ impl SubstitutionSchedule {
 					};
 
 					if !substitution_part.is_empty() {
-						if let Some(block) = block_opt  {
+						if let Some(block) = block_option {
 							block.push_str(&format!("\n{}", substitution_part.clone()));
 						} else {
-							block_opt.insert(substitution_part.clone());
+							block_option.insert(substitution_part.clone());
 						}
 					}
 				}
@@ -183,11 +183,14 @@ impl SubstitutionSchedule {
 
 	pub fn get_entries(&self) -> &HashMap<String, Substitutions> { &self.entries }
 
+	/// This function skips entries not present in the 'entries' HashMap
 	pub fn get_entries_portion(&self, classes: &HashSet<&String>) -> HashMap<String, &Substitutions> {
 		let mut portion = HashMap::new();
 
 		for class in classes {
-			portion.insert(class.clone().to_owned(), self.entries.get(*class).unwrap());
+			if let Some(substitution) = self.entries.get(*class) {
+				portion.insert(class.clone().to_owned(), substitution);
+			}
 		}
 
 		portion

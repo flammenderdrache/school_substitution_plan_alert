@@ -119,14 +119,9 @@ impl ClassesAndUsers {
 
 		for (class, users) in &self.classes_and_users {
 			for user in users {
-				if let Some(mut classes) = inside_out.get_mut(&user) {
-					classes.insert(&class);
-				} else {
-					let mut classes: HashSet<&String> = HashSet::new();
-					classes.insert(&class);
-
-					inside_out.insert(*user, classes);
-				}
+				inside_out.entry(*user)
+					.or_insert(HashSet::new())
+					.insert(&class);
 			}
 		}
 
@@ -207,13 +202,13 @@ impl DiscordNotifier {
 	}
 
 	pub async fn notify_users_for_classes(&self, day: Weekdays, substitutions: &SubstitutionSchedule) -> Result<(), serenity::Error> {
-		info!("Notifying all users for substitutions on day {}. These classes are affected: {}",
+		info!("Notifying all users on day {}. Affected classes: {}",
 			day,
 			substitutions.get_entries()
 				.keys()
 				.map(|s| format!(", {}", s))
 				.collect::<String>()
-				.split_at(2).1
+				.split_at(2).1 // removes ", " at the beginning
 		);
 
 		let data = self.data.read().await;
@@ -232,7 +227,6 @@ impl DiscordNotifier {
 		Ok(())
 	}
 
-	//only public because it wouldn't be possible to test it as private
 	fn table_from_substitutions(substitutions: &HashMap<String, &Substitutions>) -> Table {
 		let hour_marks = [
 			"0: 07:15\n - 08:00",
