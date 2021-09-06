@@ -92,7 +92,6 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let mut temp_pdf_file = std::fs::File::create(temp_file_path).expect("Couldn't create temp pdf file");
 	temp_pdf_file.write_all(&pdf)?;
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
-	let classes = discord.get_classes().await;
 
 	//This is only still here while testing the new loop. Will be removed at the next version
 	// for class in classes {

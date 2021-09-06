@@ -11,7 +11,6 @@ use lopdf::Document;
 use serde::{Deserialize, Serialize};
 
 use crate::tabula_json_parser::parse;
-use std::ops::Range;
 
 #[derive(Serialize, Deserialize, PartialOrd, PartialEq)]
 pub struct Substitutions {
@@ -57,7 +56,7 @@ impl Substitutions {
 	}
 
 	pub fn last_substitution(&self) -> usize {
-		self.as_array().iter().rposition(|b| b.is_some()).unwrap_or(0)
+		self.as_array().iter().rposition(|b| b.is_some()).unwrap_or(5)
 	}
 
 	pub fn as_array(&self) -> [&Option<String>; 6] {
@@ -177,7 +176,7 @@ impl SubstitutionSchedule {
 		Ok(Self::from_table(&table, date))
 	}
 
-	pub fn get_substitutions(&self, class: &str) -> Option<&Substitutions> {
+	pub fn _get_substitutions(&self, class: &str) -> Option<&Substitutions> {
 		self.entries.get(class)
 	}
 

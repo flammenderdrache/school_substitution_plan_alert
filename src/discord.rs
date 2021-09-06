@@ -106,7 +106,7 @@ impl ClassesAndUsers {
 		classes
 	}
 
-	pub fn get_classes(&self) -> Vec<String> {
+	pub fn _get_classes(&self) -> Vec<String> {
 		let mut classes = Vec::new();
 		for class in self.classes_and_users.keys() {
 			classes.push(class.clone());
@@ -202,6 +202,9 @@ impl DiscordNotifier {
 	}
 
 	pub async fn notify_users_for_classes(&self, day: Weekdays, substitutions: &SubstitutionSchedule) -> Result<(), serenity::Error> {
+		let data = self.data.read().await;
+		let users_and_classes = data.get::<ClassesAndUsers>().unwrap();
+
 		info!("Notifying all users on day {}. Affected classes: {}",
 			day,
 			substitutions.get_entries()
@@ -211,10 +214,10 @@ impl DiscordNotifier {
 				.split_at(2).1 // removes ", " at the beginning
 		);
 
-		let data = self.data.read().await;
-		let users_and_classes = data.get::<ClassesAndUsers>().unwrap().to_inside_out();
+		let users_and_classes = users_and_classes.to_inside_out();
 
 		for (user, classes) in users_and_classes {
+
 			let user = UserId::from(user);
 			let dm_channel = user.create_dm_channel(&self.http).await?;
 			dm_channel.say(&self.http, format!(
@@ -240,12 +243,12 @@ impl DiscordNotifier {
 		let first = substitutions.values()
 			.map(|s| s.first_substitution())
 			.min()
-			.unwrap(); // first_substitution guarantees that there is atlas 1 element
+			.unwrap_or(0); // first_substitution guarantees that there is at least 1 element
 
 		let last = substitutions.values()
 			.map(|s| s.last_substitution())
 			.max()
-			.unwrap(); // last_substitution guarantees that there is atlas 1 element
+			.unwrap_or(5); // last_substitution guarantees that there is at least 1 element
 
 		//FIXME replace table creation with table builder.
 		let first_column = hour_marks[first..=last].iter()
@@ -276,10 +279,10 @@ impl DiscordNotifier {
 		table
 	}
 
-	pub async fn get_classes(&self) -> Vec<String> {
+	pub async fn _get_classes(&self) -> Vec<String> {
 		let data = self.data.read().await;
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
-		classes_and_users.get_classes()
+		classes_and_users._get_classes()
 	}
 
 	// pub async fn insert_user(&mut self, class: String, user_id: u64) {
