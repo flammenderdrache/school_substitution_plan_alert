@@ -44,7 +44,7 @@ impl Display for Weekdays {
 
 impl From<Weekday> for Weekdays {
 	fn from(day: Weekday) -> Self {
-match day {
+		match day {
 			Weekday::Tue => Weekdays::Tuesday,
 			Weekday::Wed => Weekdays::Wednesday,
 			Weekday::Thu => Weekdays::Thursday,
