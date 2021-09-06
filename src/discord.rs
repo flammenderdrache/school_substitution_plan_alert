@@ -208,7 +208,13 @@ impl DiscordNotifier {
 
 	pub async fn notify_users_for_classes(&self, day: Weekdays, substitutions: &SubstitutionSchedule) -> Result<(), serenity::Error> {
 		//FIXME remove debug operator in log format.
-		info!("Notifying all users for substitutions on day {}. These classes are affected: {:?}", day, substitutions.get_entries().keys());
+		info!("Notifying all users for substitutions on day {}. These classes are affected: {}",
+			day,
+			substitutions.get_entries()
+				.keys()
+				.map(|s| format!(", {}", s))
+				.collect::<String>()[2..]
+		);
 
 		let data = self.data.read().await;
 		let users_and_classes = data.get::<ClassesAndUsers>().unwrap().to_inside_out();
@@ -246,10 +252,8 @@ impl DiscordNotifier {
 			.max()
 			.unwrap(); // last_substitution guarantees that there is atlas 1 element
 
-		println!("{}, {}", first, last);
-
 		//FIXME replace table creation with table builder.
-		let first_column = hour_marks[first..last].iter()
+		let first_column = hour_marks[first..=last].iter()
 			.map(|r| {
 				Row::new(vec![Cell::new(r)])
 			})
@@ -264,10 +268,9 @@ impl DiscordNotifier {
 
 			table.get_mut_row(0).unwrap().add_cell(Cell::new(class));
 
-			for i in 1..(last - first) {
-				table.printstd();
-				let row = table.get_mut_row(i).unwrap();
-				if let Some(block) = substitution_array[first + i] {
+			for i in first..=last {
+				let row = table.get_mut_row(i - first + 1).unwrap();
+				if let Some(block) = substitution_array[i] {
 					row.add_cell(Cell::new(block));
 				} else {
 					row.add_cell(Cell::new(""));
@@ -547,5 +550,10 @@ mod tests {
 		let test_class = "BGY/@;19[1";
 		let output = sanitize_and_check_register_class_input(test_class).unwrap();
 		assert_eq!(output, "BGYM191")
+	}
+
+	#[test]
+	fn test_table_generation() {
+		let table_map =
 	}
 }
