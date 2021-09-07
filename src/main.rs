@@ -13,9 +13,10 @@ use simple_logger::SimpleLogger;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::discord::DiscordNotifier;
+use crate::discord::{DiscordNotifier, ClassesAndUsers};
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
+use std::collections::{HashSet, HashMap};
 
 mod substitution_schedule;
 mod tabula_json_parser;
@@ -93,22 +94,6 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	temp_pdf_file.write_all(&pdf)?;
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
 
-	//This is only still here while testing the new loop. Will be removed at the next version
-	// for class in classes {
-	// 	if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
-	// 		if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
-	// 			let old_schedule: SubstitutionSchedule = serde_json::from_reader(old_schedule_json).expect("For some reason the json of the old PDF was malformed.");
-	// 			if let Some(old_substitutions) = old_schedule.get_substitutions(class.as_str()) {
-	// 				if new_substitutions != old_substitutions {
-	// 					discord.notify_users_for_class(class.as_str(), day).await?;
-	// 				}
-	// 			}
-	// 		} else {
-	// 			discord.notify_users_for_class(class.as_str(), day).await?;
-	// 		}
-	// 	}
-	// }
-
 	//Open and parse the json file first, instead of at each iteration in the loop
 	let old_schedule_option: Option<SubstitutionSchedule> = {
 		let old_json_file = std::fs::OpenOptions::new()
@@ -129,13 +114,36 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 		}
 	};
 
-	if let Some(old_schedule) = old_schedule_option {
-		if new_schedule.get_entries() != old_schedule.get_entries() {
-			discord.notify_users_for_classes(day, &new_schedule).await?;
+	let mut to_notify: HashMap<u64, HashSet<&String>> = HashMap::new();
+
+	let data = discord.data.read().await;
+	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
+	let classes_and_users_inner = classes_and_users.get_inner_classes_and_users();
+
+	let mut add_to_notify = |class| {
+		for user_id in classes_and_users_inner.get(class).unwrap() { // The unwrap is safe since we know the class exists
+			to_notify
+				.entry(*user_id)
+				.or_insert(HashSet::new())
+				.insert(class);
 		}
-	} else {
-		discord.notify_users_for_classes(day, &new_schedule).await?;
+	};
+
+	for class in classes_and_users_inner.keys() {
+		if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
+			if let Some(old_schedule) = &old_schedule_option {
+				if let Some(old_substitutions) = old_schedule.get_substitutions(class.as_str()) {
+					if new_substitutions != old_substitutions {
+						add_to_notify(class);
+					}
+				}
+			} else {
+				add_to_notify(class);
+			}
+		}
 	}
+
+	discord.notify_users(day, &new_schedule, to_notify).await;
 
 	let new_substitution_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
 	let mut substitution_file = OpenOptions::new()

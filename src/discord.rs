@@ -4,6 +4,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use log::{debug, error, info};
+use prettytable::{Cell, Row, Table};
+use prettytable::format::consts::FORMAT_BOX_CHARS;
 use serde::{Deserialize, Serialize};
 use serenity::{
 	framework::standard::{
@@ -24,10 +26,8 @@ use sqlx::{Pool, Sqlite};
 
 use crate::config::Config;
 use crate::substitution_pdf_getter::Weekdays;
-use crate::USER_AND_CLASSES_SAVE_LOCATION;
 use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
-use prettytable::{Table, Row, Cell};
-use prettytable::format::consts::FORMAT_BOX_CHARS;
+use crate::USER_AND_CLASSES_SAVE_LOCATION;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -106,12 +106,16 @@ impl ClassesAndUsers {
 		classes
 	}
 
-	pub fn _get_classes(&self) -> Vec<String> {
+	pub fn get_classes(&self) -> Vec<String> {
 		let mut classes = Vec::new();
 		for class in self.classes_and_users.keys() {
 			classes.push(class.clone());
 		}
 		classes
+	}
+
+	pub fn get_inner_classes_and_users(&self) -> &HashMap<String, HashSet<u64>> {
+		&self.classes_and_users
 	}
 
 	pub fn to_inside_out(&self) -> HashMap<u64, HashSet<&String>> {
@@ -143,8 +147,8 @@ pub trait Notifier {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct DiscordNotifier {
-	http: Arc<Http>,
-	data: Arc<RwLock<TypeMap>>,
+	pub http: Arc<Http>,
+	pub data: Arc<RwLock<TypeMap>>,
 }
 
 impl DiscordNotifier {
@@ -201,6 +205,10 @@ impl DiscordNotifier {
 		}
 	}
 
+	pub async fn notify_users(&self, day: Weekdays, substitutions: &SubstitutionSchedule, users_to_notify: HashMap<u64, HashSet<&String>>) {
+
+	}
+
 	pub async fn notify_users_for_classes(&self, day: Weekdays, substitutions: &SubstitutionSchedule) -> Result<(), serenity::Error> {
 		let data = self.data.read().await;
 		let users_and_classes = data.get::<ClassesAndUsers>().unwrap();
@@ -217,14 +225,13 @@ impl DiscordNotifier {
 		let users_and_classes = users_and_classes.to_inside_out();
 
 		for (user, classes) in users_and_classes {
-
 			let user = UserId::from(user);
 			let dm_channel = user.create_dm_channel(&self.http).await?;
 			dm_channel.say(&self.http, format!(
 				"There are changes in schedule on {}: ```\n{}\n```",
 				day,
 				Self::table_from_substitutions(&substitutions.get_entries_portion(&classes)),
-			),).await?;
+			), ).await?;
 		}
 
 		Ok(())
@@ -282,7 +289,7 @@ impl DiscordNotifier {
 	pub async fn _get_classes(&self) -> Vec<String> {
 		let data = self.data.read().await;
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
-		classes_and_users._get_classes()
+		classes_and_users.get_classes()
 	}
 
 	// pub async fn insert_user(&mut self, class: String, user_id: u64) {

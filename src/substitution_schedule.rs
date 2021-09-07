@@ -176,7 +176,7 @@ impl SubstitutionSchedule {
 		Ok(Self::from_table(&table, date))
 	}
 
-	pub fn _get_substitutions(&self, class: &str) -> Option<&Substitutions> {
+	pub fn get_substitutions(&self, class: &str) -> Option<&Substitutions> {
 		self.entries.get(class)
 	}
 
@@ -188,7 +188,7 @@ impl SubstitutionSchedule {
 
 		for class in classes {
 			if let Some(substitution) = self.entries.get(*class) {
-				portion.insert(class.clone().to_owned(), substitution);
+				portion.insert(class.to_owned().to_owned(), substitution);
 			}
 		}
 
