@@ -191,22 +191,22 @@ impl DiscordNotifier {
 		}
 	}
 
-	pub async fn notify_users(&self, day: Weekdays, substitutions: &SubstitutionSchedule, users_to_notify: HashMap<u64, HashSet<&String>>) -> Result<(), serenity::Error> {
+	pub async fn notify_users(&self, day: Weekdays, substitutions: &SubstitutionSchedule, users_to_notify: HashSet<u64>) -> Result<(), serenity::Error> {
 		let data = self.data.read().await;
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 
-		for (user_id, classes) in &users_to_notify {
-			let user = UserId::from(*user_id);
+		for user_id in users_to_notify {
+			let user = UserId::from(user_id);
 			let dm_channel = user.create_dm_channel(&self.http).await?;
-			let mut notify_classes = Vec::new();
+			let mut user_class_substitutions = HashMap::new();
 
-			for class in classes_and_users.get_user_classes(*user_id) {
-				if users_to_notify.get(user_id).unwrap().contains(&class) {
-					notify_classes.push(class);
+			for class in classes_and_users.get_user_classes(user_id) {
+				if let Some(class_substitutions) = substitutions.get_substitutions(class.as_str()) {
+					user_class_substitutions.insert(class, class_substitutions);
 				}
 			}
 
-			let table = Self::table_from_substitutions(&substitutions.get_entries_portion(classes));
+			let table = Self::table_from_substitutions(&user_class_substitutions);
 			dm_channel.say(
 				&self.http,
 				format!(

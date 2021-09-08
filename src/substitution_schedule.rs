@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::tabula_json_parser::parse;
 
-#[derive(Serialize, Deserialize, PartialOrd, PartialEq)]
+#[derive(Serialize, Deserialize, PartialOrd, PartialEq, Debug)]
 pub struct Substitutions {
 	#[serde(rename(serialize = "0"))]
 	#[serde(rename(deserialize = "0"))]
@@ -48,7 +48,7 @@ impl Substitutions {
 			block_2: None,
 			block_3: None,
 			block_4: None,
-			block_5: None
+			block_5: None,
 		}
 	}
 	pub fn first_substitution(&self) -> usize {
@@ -71,7 +71,7 @@ impl Display for Substitutions {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SubstitutionSchedule {
 	/// The creation date inside the PDF
 	pdf_create_date: i64,
@@ -184,7 +184,7 @@ impl SubstitutionSchedule {
 
 	/// This function skips entries not present in the 'entries' `HashMap`
 	#[allow(clippy::implicit_clone)]
-	pub fn get_entries_portion(&self, classes: &HashSet<&String>) -> HashMap<String, &Substitutions> {
+	pub fn _get_entries_portion(&self, classes: &HashSet<&String>) -> HashMap<String, &Substitutions> {
 		let mut portion = HashMap::new();
 
 		for class in classes {

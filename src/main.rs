@@ -1,6 +1,7 @@
 #![allow(clippy::non_ascii_literal)]
 #![allow(clippy::let_underscore_drop)]
 
+use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
@@ -13,10 +14,9 @@ use simple_logger::SimpleLogger;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::discord::{DiscordNotifier, ClassesAndUsers};
+use crate::discord::{ClassesAndUsers, DiscordNotifier};
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
-use std::collections::{HashSet, HashMap};
 
 mod substitution_schedule;
 mod tabula_json_parser;
@@ -115,7 +115,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 		}
 	};
 
-	let mut to_notify: HashMap<u64, HashSet<&String>> = HashMap::new();
+	let mut to_notify: HashSet<u64> = HashSet::new();
 
 	let data = discord.data.read().await;
 	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
@@ -123,10 +123,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 
 	let mut add_to_notify = |class| {
 		for user_id in classes_and_users_inner.get(class).unwrap() { // The unwrap is safe since we know the class exists
-			to_notify
-				.entry(*user_id)
-				.or_insert(HashSet::new())
-				.insert(class);
+			to_notify.insert(*user_id);
 		}
 	};
 
