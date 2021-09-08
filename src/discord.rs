@@ -213,7 +213,7 @@ impl DiscordNotifier {
 					"There are changes in schedule on {}: ```\n{}\n```",
 					day,
 					table
-				)
+				),
 			).await?;
 		}
 
