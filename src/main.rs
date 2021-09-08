@@ -82,6 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	}
 }
 
+#[allow(clippy::or_fun_call)]
 async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>) -> Result<(), Box<dyn std::error::Error>> {
 	info!("Checking PDF for {}", day);
 	let temp_dir_path = make_temp_dir();
@@ -143,7 +144,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 		}
 	}
 
-	discord.notify_users(day, &new_schedule, to_notify).await;
+	discord.notify_users(day, &new_schedule, to_notify).await?;
 
 	let new_substitution_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
 	let mut substitution_file = OpenOptions::new()
