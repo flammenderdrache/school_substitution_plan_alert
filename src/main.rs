@@ -1,6 +1,7 @@
 #![allow(clippy::non_ascii_literal)]
 #![allow(clippy::let_underscore_drop)]
 
+use std::collections::HashSet;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
@@ -13,7 +14,7 @@ use simple_logger::SimpleLogger;
 use uuid::Uuid;
 
 use crate::config::Config;
-use crate::discord::DiscordNotifier;
+use crate::discord::{ClassesAndUsers, DiscordNotifier};
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
 
@@ -81,6 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	}
 }
 
+#[allow(clippy::or_fun_call)]
 async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>) -> Result<(), Box<dyn std::error::Error>> {
 	info!("Checking PDF for {}", day);
 	let temp_dir_path = make_temp_dir();
@@ -92,22 +94,6 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let mut temp_pdf_file = std::fs::File::create(temp_file_path).expect("Couldn't create temp pdf file");
 	temp_pdf_file.write_all(&pdf)?;
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
-
-	//This is only still here while testing the new loop. Will be removed at the next version
-	// for class in classes {
-	// 	if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
-	// 		if let Ok(old_schedule_json) = std::fs::File::open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day)) {
-	// 			let old_schedule: SubstitutionSchedule = serde_json::from_reader(old_schedule_json).expect("For some reason the json of the old PDF was malformed.");
-	// 			if let Some(old_substitutions) = old_schedule.get_substitutions(class.as_str()) {
-	// 				if new_substitutions != old_substitutions {
-	// 					discord.notify_users_for_class(class.as_str(), day).await?;
-	// 				}
-	// 			}
-	// 		} else {
-	// 			discord.notify_users_for_class(class.as_str(), day).await?;
-	// 		}
-	// 	}
-	// }
 
 	//Open and parse the json file first, instead of at each iteration in the loop
 	let old_schedule_option: Option<SubstitutionSchedule> = {
@@ -129,13 +115,33 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 		}
 	};
 
-	if let Some(old_schedule) = old_schedule_option {
-		if new_schedule.get_entries() != old_schedule.get_entries() {
-			discord.notify_users_for_classes(day, &new_schedule).await?;
+	let mut to_notify: HashSet<u64> = HashSet::new();
+
+	let data = discord.data.read().await;
+	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
+	let classes_and_users_inner = classes_and_users.get_inner_classes_and_users();
+
+	let mut add_to_notify = |class| {
+		for user_id in classes_and_users_inner.get(class).unwrap() { // The unwrap is safe since we know the class exists
+			to_notify.insert(*user_id);
 		}
-	} else {
-		discord.notify_users_for_classes(day, &new_schedule).await?;
+	};
+
+	for class in classes_and_users_inner.keys() {
+		if let Some(new_substitutions) = new_schedule.get_substitutions(class.as_str()) {
+			if let Some(old_schedule) = &old_schedule_option {
+				if let Some(old_substitutions) = old_schedule.get_substitutions(class.as_str()) {
+					if new_substitutions != old_substitutions {
+						add_to_notify(class);
+					}
+				}
+			} else {
+				add_to_notify(class);
+			}
+		}
 	}
+
+	discord.notify_users(day, &new_schedule, to_notify).await?;
 
 	let new_substitution_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
 	let mut substitution_file = OpenOptions::new()

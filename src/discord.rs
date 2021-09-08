@@ -4,6 +4,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use log::{debug, error, info};
+use prettytable::{Cell, Row, Table};
+use prettytable::format::consts::FORMAT_BOX_CHARS;
 use serde::{Deserialize, Serialize};
 use serenity::{
 	framework::standard::{
@@ -24,10 +26,8 @@ use sqlx::{Pool, Sqlite};
 
 use crate::config::Config;
 use crate::substitution_pdf_getter::Weekdays;
-use crate::USER_AND_CLASSES_SAVE_LOCATION;
 use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
-use prettytable::{Table, Row, Cell};
-use prettytable::format::consts::FORMAT_BOX_CHARS;
+use crate::USER_AND_CLASSES_SAVE_LOCATION;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -114,18 +114,8 @@ impl ClassesAndUsers {
 		classes
 	}
 
-	pub fn to_inside_out(&self) -> HashMap<u64, HashSet<&String>> {
-		let mut inside_out: HashMap<u64, HashSet<&String>> = HashMap::new();
-
-		for (class, users) in &self.classes_and_users {
-			for user in users {
-				inside_out.entry(*user)
-					.or_insert(HashSet::new())
-					.insert(&class);
-			}
-		}
-
-		inside_out
+	pub fn get_inner_classes_and_users(&self) -> &HashMap<String, HashSet<u64>> {
+		&self.classes_and_users
 	}
 }
 
@@ -143,8 +133,8 @@ pub trait Notifier {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct DiscordNotifier {
-	http: Arc<Http>,
-	data: Arc<RwLock<TypeMap>>,
+	pub http: Arc<Http>,
+	pub data: Arc<RwLock<TypeMap>>,
 }
 
 impl DiscordNotifier {
@@ -201,35 +191,36 @@ impl DiscordNotifier {
 		}
 	}
 
-	pub async fn notify_users_for_classes(&self, day: Weekdays, substitutions: &SubstitutionSchedule) -> Result<(), serenity::Error> {
+	pub async fn notify_users(&self, day: Weekdays, substitutions: &SubstitutionSchedule, users_to_notify: HashSet<u64>) -> Result<(), serenity::Error> {
 		let data = self.data.read().await;
-		let users_and_classes = data.get::<ClassesAndUsers>().unwrap();
+		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 
-		info!("Notifying all users on day {}. Affected classes: {}",
-			day,
-			substitutions.get_entries()
-				.keys()
-				.map(|s| format!(", {}", s))
-				.collect::<String>()
-				.split_at(2).1 // removes ", " at the beginning
-		);
-
-		let users_and_classes = users_and_classes.to_inside_out();
-
-		for (user, classes) in users_and_classes {
-
-			let user = UserId::from(user);
+		for user_id in users_to_notify {
+			let user = UserId::from(user_id);
 			let dm_channel = user.create_dm_channel(&self.http).await?;
-			dm_channel.say(&self.http, format!(
-				"There are changes in schedule on {}: ```\n{}\n```",
-				day,
-				Self::table_from_substitutions(&substitutions.get_entries_portion(&classes)),
-			),).await?;
+			let mut user_class_substitutions = HashMap::new();
+
+			for class in classes_and_users.get_user_classes(user_id) {
+				if let Some(class_substitutions) = substitutions.get_substitutions(class.as_str()) {
+					user_class_substitutions.insert(class, class_substitutions);
+				}
+			}
+
+			let table = Self::table_from_substitutions(&user_class_substitutions);
+			dm_channel.say(
+				&self.http,
+				format!(
+					"There are changes in schedule on {}: ```\n{}\n```",
+					day,
+					table
+				),
+			).await?;
 		}
 
 		Ok(())
 	}
 
+	#[allow(clippy::needless_range_loop)]
 	fn table_from_substitutions(substitutions: &HashMap<String, &Substitutions>) -> Table {
 		let hour_marks = [
 			"0: 07:15\n - 08:00",
@@ -278,18 +269,6 @@ impl DiscordNotifier {
 
 		table
 	}
-
-	pub async fn _get_classes(&self) -> Vec<String> {
-		let data = self.data.read().await;
-		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
-		classes_and_users._get_classes()
-	}
-
-	// pub async fn insert_user(&mut self, class: String, user_id: u64) {
-	// 	let mut data = self.data.write().await;
-	// 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-	// 	classes_and_users.insert_user(class, user_id);
-	// }
 }
 
 #[group]
