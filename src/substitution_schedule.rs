@@ -141,8 +141,9 @@ impl SubstitutionSchedule {
 		let since_the_epoch = time_now
 			.duration_since(SystemTime::UNIX_EPOCH)
 			.expect("Time got fucked");
+
 		#[allow(clippy::cast_possible_truncation)]
-			let time_millis = since_the_epoch.as_millis() as u64;
+		let time_millis = since_the_epoch.as_millis() as u64;
 
 		Self {
 			pdf_create_date,
@@ -178,6 +179,8 @@ impl SubstitutionSchedule {
 			.arg("-g")
 			.arg("-f")
 			.arg("JSON")
+			.arg("-p")
+			.arg("all")
 			.arg(path)
 			.output()?;
 
