@@ -74,7 +74,7 @@ impl Display for Substitutions {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubstitutionSchedule {
 	/// The creation date inside the PDF
-	pdf_create_date: i64,
+	pub pdf_create_date: i64,
 	/// The name of the class is the Key and the Value is a Substitutions struct
 	entries: HashMap<String, Substitutions>,
 	/// The time when the struct was created, used for comparing the age
@@ -83,7 +83,7 @@ pub struct SubstitutionSchedule {
 
 impl SubstitutionSchedule {
 	#[allow(clippy::ptr_arg)]
-	pub fn from_table(table: &Vec<Vec<String>>, pdf_create_date: i64) -> Self {
+	pub fn table_to_substitutions(table: &Vec<Vec<String>>) -> HashMap<String, Substitutions> {
 		let mut entries: HashMap<String, Substitutions> = HashMap::new();
 
 		let classes = &table[0][1..];
@@ -125,6 +125,16 @@ impl SubstitutionSchedule {
 			}
 
 			row += 1;
+		}
+
+		entries
+	}
+
+	pub fn from_table(tables: &Vec<Vec<Vec<String>>>, pdf_create_date: i64) -> Self {
+		let mut entries = HashMap::new();
+
+		for table in tables {
+			entries.extend(Self::table_to_substitutions(table))
 		}
 
 		let time_now = SystemTime::now();
