@@ -8,18 +8,19 @@ use serde_json::Value;
 pub fn parse(content: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
 	let json: Value = serde_json::from_str(content)?;
 	let array = json.as_array().ok_or("Json malformed")?;
-	let object = array[0].as_object().ok_or("Json malformed")?;
-	let data = object.get("data").ok_or("Json data field missing")?;
-
 
 	let mut rows = Vec::new();
+	for entry in array {
+		let object = entry.as_object().ok_or("Json malformed")?;
+		let data = object.get("data").ok_or("Json data field missing")?;
 
-	for row in data.as_array().ok_or("Json data missing")? {
-		let row: Vec<Cell> = serde_json::from_value(row.clone())?;
-		let row = Row {
-			row
-		};
-		rows.push(row);
+		for row in data.as_array().ok_or("Json data missing")? {
+			let row: Vec<Cell> = serde_json::from_value(row.clone())?;
+			let row = Row {
+				row
+			};
+			rows.push(row);
+		}
 	}
 
 	let mut rows_as_text = Vec::new();
