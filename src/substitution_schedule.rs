@@ -83,7 +83,7 @@ pub struct SubstitutionSchedule {
 
 impl SubstitutionSchedule {
 	#[allow(clippy::ptr_arg)]
-	pub fn table_to_substitutions(table: &Vec<Vec<String>>) -> HashMap<String, Substitutions> {
+	fn table_to_substitutions(table: &Vec<Vec<String>>) -> HashMap<String, Substitutions> {
 		let mut entries: HashMap<String, Substitutions> = HashMap::new();
 
 		let classes = &table[0][1..];
