@@ -130,11 +130,12 @@ impl SubstitutionSchedule {
 		entries
 	}
 
+	#[allow(clippy::ptr_arg)]
 	pub fn from_table(tables: &Vec<Vec<Vec<String>>>, pdf_create_date: i64) -> Self {
 		let mut entries = HashMap::new();
 
 		for table in tables {
-			entries.extend(Self::table_to_substitutions(table))
+			entries.extend(Self::table_to_substitutions(table));
 		}
 
 		let time_now = SystemTime::now();
