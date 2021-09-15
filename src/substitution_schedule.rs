@@ -74,7 +74,7 @@ impl Display for Substitutions {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubstitutionSchedule {
 	/// The creation date inside the PDF
-	pdf_create_date: i64,
+	pub pdf_create_date: i64,
 	/// The name of the class is the Key and the Value is a Substitutions struct
 	entries: HashMap<String, Substitutions>,
 	/// The time when the struct was created, used for comparing the age
