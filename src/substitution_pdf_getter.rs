@@ -4,6 +4,8 @@ use std::time::Duration;
 use chrono::Weekday;
 use reqwest::Client;
 
+use crate::SOURCE_URLS;
+
 ///Enum with the weekdays where a Substitution PDF is available
 #[derive(Debug, PartialOrd, PartialEq, Clone, Copy)]
 pub enum Weekdays {
@@ -62,13 +64,7 @@ pub struct SubstitutionPDFGetter<'a> {
 impl<'a> SubstitutionPDFGetter<'a> {
 	pub fn new(client: Client) -> Self {
 		Self {
-			urls: [
-				"https://buessing.schule/plaene/VertretungsplanA4_Montag.pdf",
-				"https://buessing.schule/plaene/VertretungsplanA4_Dienstag.pdf",
-				"https://buessing.schule/plaene/VertretungsplanA4_Mittwoch.pdf",
-				"https://buessing.schule/plaene/VertretungsplanA4_Donnerstag.pdf",
-				"https://buessing.schule/plaene/VertretungsplanA4_Freitag.pdf",
-			],
+			urls: SOURCE_URLS,
 			client,
 		}
 	}

@@ -28,6 +28,7 @@ use crate::config::Config;
 use crate::substitution_pdf_getter::Weekdays;
 use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
 use crate::USER_AND_CLASSES_SAVE_LOCATION;
+use crate::SOURCE_URLS;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -210,9 +211,10 @@ impl DiscordNotifier {
 			dm_channel.say(
 				&self.http,
 				format!(
-					"There are changes in schedule on {}: ```\n{}\n```",
+					"There are changes in schedule on {}: ```\n{}\n```Source: {}",
 					day,
-					table
+					table,
+					SOURCE_URLS[day as usize],
 				),
 			).await?;
 		}

@@ -27,6 +27,13 @@ mod config;
 const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
 const USER_AND_CLASSES_SAVE_LOCATION: &str = "./class_registry.json";
+static SOURCE_URLS: [&str; 5] = [
+	"https://buessing.schule/plaene/VertretungsplanA4_Montag.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Dienstag.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Mittwoch.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Donnerstag.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Freitag.pdf",
+];
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
