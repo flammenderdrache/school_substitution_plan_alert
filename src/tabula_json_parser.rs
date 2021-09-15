@@ -5,30 +5,36 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 ///Extracts the text from the rows and cells in the json that gets outputted by tabula
-pub fn parse(content: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
+pub fn parse(content: &str) -> Result<Vec<Vec<Vec<String>>>, Box<dyn std::error::Error>> {
 	let json: Value = serde_json::from_str(content)?;
 	let array = json.as_array().ok_or("Json malformed")?;
 
-	let mut rows = Vec::new();
+	let mut tables = Vec::new();
 	for entry in array {
 		let object = entry.as_object().ok_or("Json malformed")?;
 		let data = object.get("data").ok_or("Json data field missing")?;
 
+		let mut table_rows = Vec::new();
 		for row in data.as_array().ok_or("Json data missing")? {
 			let row: Vec<Cell> = serde_json::from_value(row.clone())?;
 			let row = Row {
 				row
 			};
-			rows.push(row);
+			table_rows.push(row);
 		}
+		tables.push(table_rows);
 	}
 
-	let mut rows_as_text = Vec::new();
-	for mut row in rows {
-		rows_as_text.push(row.extract_text());
+	let mut tables_with_rows_as_text = Vec::new();
+	for table_rows in tables {
+		let mut rows_as_text = Vec::new();
+		for mut row in table_rows {
+			rows_as_text.push(row.extract_text());
+		}
+		tables_with_rows_as_text.push(rows_as_text);
 	}
 
-	Ok(rows_as_text)
+	Ok(tables_with_rows_as_text)
 }
 
 ///A row in the substitution table
