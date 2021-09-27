@@ -4,6 +4,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use log::{debug, error, info};
+use prettytable::{Cell, Row, Table};
+use prettytable::format::consts::FORMAT_BOX_CHARS;
 use serde::{Deserialize, Serialize};
 use serenity::{
 	framework::standard::{
@@ -22,8 +24,9 @@ use serenity::http::Http;
 use serenity::model::prelude::{Activity, OnlineStatus, Ready, UserId};
 use sqlx::{Pool, Sqlite};
 
-use crate::substitution_pdf_getter::Weekdays;
 use crate::config::Config;
+use crate::substitution_pdf_getter::Weekdays;
+use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
 use crate::USER_AND_CLASSES_SAVE_LOCATION;
 
 #[derive(Serialize, Deserialize)]
@@ -76,7 +79,6 @@ impl ClassesAndUsers {
 		self.write_to_file(user_and_classes_save_location);
 	}
 
-	//maybe return result instead of bool
 	pub fn remove_user_from_class(&mut self, class: &str, user_id: u64, user_and_classes_save_location: &Path) -> bool {
 		debug!("Class for user {} is {}", class, &user_id);
 		let mut successful = false;
@@ -104,12 +106,16 @@ impl ClassesAndUsers {
 		classes
 	}
 
-	pub fn get_classes(&self) -> Vec<String> {
+	pub fn _get_classes(&self) -> Vec<String> {
 		let mut classes = Vec::new();
 		for class in self.classes_and_users.keys() {
 			classes.push(class.clone());
 		}
 		classes
+	}
+
+	pub fn get_inner_classes_and_users(&self) -> &HashMap<String, HashSet<u64>> {
+		&self.classes_and_users
 	}
 }
 
@@ -127,8 +133,8 @@ pub trait Notifier {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct DiscordNotifier {
-	http: Arc<Http>,
-	data: Arc<RwLock<TypeMap>>,
+	pub http: Arc<Http>,
+	pub data: Arc<RwLock<TypeMap>>,
 }
 
 impl DiscordNotifier {
@@ -144,7 +150,7 @@ impl DiscordNotifier {
 				.on_mention(Some(UserId::from(881938899876868107)))
 				.prefix(config.general.prefix.as_str())
 				.delimiters(vec![", ", ",", " "])
-				.owners(owners)
+				.owners(config.general.owners.clone())
 			)
 			.before(before)
 			.after(after)
@@ -185,37 +191,84 @@ impl DiscordNotifier {
 		}
 	}
 
-	pub async fn notify_users_for_class(&self, class: &str, day: Weekdays) -> Result<(), serenity::Error> {
-		info!("Notifying all users in class {} on day {}", class, day);
-
+	pub async fn notify_users(&self, day: Weekdays, substitutions: &SubstitutionSchedule, users_to_notify: HashSet<u64>) -> Result<(), serenity::Error> {
 		let data = self.data.read().await;
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 
-		for user in classes_and_users.classes_and_users.get(class).unwrap() {
-			let user = UserId::from(*user);
+		for user_id in users_to_notify {
+			let user = UserId::from(user_id);
 			let dm_channel = user.create_dm_channel(&self.http).await?;
-			dm_channel.say(&self.http, format!(
-				"Es gibt eine Vertretungsplanänderung am {} für Klasse {}",
-				day,
-				class,
-			),
-			).await?;//TODO refine, send the link to the corresponding day maybe too etc.
+			let mut user_class_substitutions = HashMap::new();
+
+			for class in classes_and_users.get_user_classes(user_id) {
+				if let Some(class_substitutions) = substitutions.get_substitutions(class.as_str()) {
+					user_class_substitutions.insert(class, class_substitutions);
+				}
+			}
+
+			let table = Self::table_from_substitutions(&user_class_substitutions);
+			dm_channel.say(
+				&self.http,
+				format!(
+					"There are changes in schedule on {}: ```\n{}\n```",
+					day,
+					table
+				),
+			).await?;
 		}
 
 		Ok(())
 	}
 
-	pub async fn get_classes(&self) -> Vec<String> {
-		let data = self.data.read().await;
-		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
-		classes_and_users.get_classes()
-	}
+	#[allow(clippy::needless_range_loop)]
+	fn table_from_substitutions(substitutions: &HashMap<String, &Substitutions>) -> Table {
+		let hour_marks = [
+			"0: 07:15\n - 08:00",
+			"1: 08:00\n - 09:30",
+			"2: 09:50\n - 11:20",
+			"3: 11:40\n - 13:10",
+			"4: 13:30\n - 15:00",
+			"5: 15:15\n - 16:45"
+		];
 
-	// pub async fn insert_user(&mut self, class: String, user_id: u64) {
-	// 	let mut data = self.data.write().await;
-	// 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-	// 	classes_and_users.insert_user(class, user_id);
-	// }
+		let first = substitutions.values()
+			.map(|s| s.first_substitution())
+			.min()
+			.unwrap_or(0); // first_substitution guarantees that there is at least 1 element
+
+		let last = substitutions.values()
+			.map(|s| s.last_substitution())
+			.max()
+			.unwrap_or(5); // last_substitution guarantees that there is at least 1 element
+
+		//FIXME replace table creation with table builder.
+		let first_column = hour_marks[first..=last].iter()
+			.map(|r| {
+				Row::new(vec![Cell::new(r)])
+			})
+			.collect::<Vec<Row>>();
+
+		let mut table = Table::init(first_column);
+		table.insert_row(0, Row::new(vec![Cell::new("")]));
+		table.set_format(*FORMAT_BOX_CHARS);
+
+		for (class, substitution) in substitutions {
+			let substitution_array = substitution.as_array();
+
+			table.get_mut_row(0).unwrap().add_cell(Cell::new(class));
+
+			for i in first..=last {
+				let row = table.get_mut_row(i - first + 1).unwrap();
+				if let Some(block) = substitution_array[i] {
+					row.add_cell(Cell::new(block));
+				} else {
+					row.add_cell(Cell::new(""));
+				}
+			}
+		}
+
+		table
+	}
 }
 
 #[group]
@@ -231,9 +284,9 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 	let user = msg.author.id.0;
 	let mut class = args.single::<String>().unwrap();
 
-	let sanitized_input = sanitize_and_check_register_class_input(class);
+	let sanitized_input = sanitize_and_check_register_class_input(class.as_str());
 	match sanitized_input {
-		Ok(sanitized_input_class) => { class = sanitized_input_class }
+		Ok(sanitized_input_class) => { class = sanitized_input_class; }
 		Err(why) => {
 			msg.reply_ping(&ctx.http, why).await?;
 			return Ok(());
@@ -411,31 +464,32 @@ pub async fn my_help(
 
 ///Removes the dots to make e.g. "BGYM19.1" valid (turning it into "BGYM191")
 ///Also turns the input uppercase; "BGym19.1" -> "BGYM191" as that is how they are referred to in the PDF
-fn sanitize_and_check_register_class_input(input: String) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+fn sanitize_and_check_register_class_input(input: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
 	let input = input.replace('.', "");
 
 	if input.len() < 4 {
-		return Err("Argument too short".into())
+		return Err("Argument too short".into());
 	}
 
-	if !(input.contains(|c: char| c.is_alphabetic()) &&
+	if !(input.contains(char::is_alphabetic) &&
 		input.contains(|c: char| c.is_ascii_digit())) {
-		return Err("Argument is incorrectly formatted".into())
+		return Err("Argument is incorrectly formatted".into());
 	}
 
 	let input = input.to_uppercase();
 
-	return Ok(String::from(input));
+	Ok(input)
 }
 
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+
 	#[test]
 	fn test_sanitize_should_pass() {
 		let test_class = "BGYM191";
-		let output = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		let output = sanitize_and_check_register_class_input(test_class).unwrap();
 		assert_eq!(output, test_class);
 	}
 
@@ -443,13 +497,13 @@ mod tests {
 	#[should_panic]
 	fn test_sanitize_too_short() {
 		let test_class = "B2";
-		let _ = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		let _ = sanitize_and_check_register_class_input(test_class).unwrap();
 	}
 
 	#[test]
 	fn test_sanitize_remove_dots() {
 		let test_class = "BGYM19.1";
-		let output = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		let output = sanitize_and_check_register_class_input(test_class).unwrap();
 		assert_eq!(output, "BGYM191");
 	}
 
@@ -457,21 +511,143 @@ mod tests {
 	#[should_panic]
 	fn test_sanitize_missing_class_number() {
 		let test_class = "ELIAS";
-		let _ = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		let _ = sanitize_and_check_register_class_input(test_class).unwrap();
 	}
 
 	#[test]
 	#[should_panic]
 	fn test_sanitize_only_numbers() {
 		let test_class = "1234567420";
-		let _ = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		let _ = sanitize_and_check_register_class_input(test_class).unwrap();
 	}
 
 	#[test]
 	#[should_panic]
 	fn test_sanitize_check_between_large_char_and_small_char_ascii_value() {
 		let test_class = "BGY/@;19[1";
-		let output = sanitize_and_check_register_class_input(test_class.to_owned()).unwrap();
+		let output = sanitize_and_check_register_class_input(test_class).unwrap();
 		assert_eq!(output, "BGYM191")
+	}
+
+	#[test]
+	fn test_table_generation() {
+		let mut table_map = HashMap::new();
+
+		let mut first = Substitutions::new();
+		first.block_1.insert("ONE".to_owned());
+		first.block_3.insert("THREE".to_owned());
+		first.block_5.insert("FIVE".to_owned());
+		table_map.insert("FIRST".to_owned(), &first);
+
+		let mut second = Substitutions::new();
+		second.block_0.insert("ZERO".to_owned());
+		second.block_1.insert("ONE".to_owned());
+		second.block_2.insert("TWO".to_owned());
+		second.block_3.insert("THREE".to_owned());
+		second.block_4.insert("FOUR".to_owned());
+		second.block_5.insert("FIVE".to_owned());
+		table_map.insert("SECOND".to_owned(), &second);
+
+		let out = DiscordNotifier::table_from_substitutions(&table_map);
+
+		let expected_1 = "\
+		┌──────────┬────────┬───────┐\n\
+		│          │ SECOND │ FIRST │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 0: 07:15 │ ZERO   │       │\n\
+		│  - 08:00 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 1: 08:00 │ ONE    │ ONE   │\n\
+		│  - 09:30 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 2: 09:50 │ TWO    │       │\n\
+		│  - 11:20 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 3: 11:40 │ THREE  │ THREE │\n\
+		│  - 13:10 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 4: 13:30 │ FOUR   │       │\n\
+		│  - 15:00 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 5: 15:15 │ FIVE   │ FIVE  │\n\
+		│  - 16:45 │        │       │\n\
+		└──────────┴────────┴───────┘\n";
+
+		let expected_2 = "\
+		┌──────────┬───────┬────────┐\n\
+		│          │ FIRST │ SECOND │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 0: 07:15 │       │ ZERO   │\n\
+		│  - 08:00 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 1: 08:00 │ ONE   │ ONE    │\n\
+		│  - 09:30 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 2: 09:50 │       │ TWO    │\n\
+		│  - 11:20 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 3: 11:40 │ THREE │ THREE  │\n\
+		│  - 13:10 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 4: 13:30 │       │ FOUR   │\n\
+		│  - 15:00 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 5: 15:15 │ FIVE  │ FIVE   │\n\
+		│  - 16:45 │       │        │\n\
+		└──────────┴───────┴────────┘\n";
+
+		assert!(out.to_string() == expected_1 || out.to_string() == expected_2);
+	}
+
+	#[test]
+	fn test_table_generation_2() {
+		let mut table_map = HashMap::new();
+
+		let mut first = Substitutions::new();
+		first.block_1.insert("ONE".to_owned());
+		first.block_4.insert("FOUR".to_owned());
+		table_map.insert("FIRST".to_owned(), &first);
+
+		let mut second = Substitutions::new();
+		second.block_3.insert("THREE".to_owned());
+		table_map.insert("SECOND".to_owned(), &second);
+
+		let out = DiscordNotifier::table_from_substitutions(&table_map);
+
+		let expected_1 = "\
+		┌──────────┬────────┬───────┐\n\
+		│          │ SECOND │ FIRST │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 1: 08:00 │        │ ONE   │\n\
+		│  - 09:30 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 2: 09:50 │        │       │\n\
+		│  - 11:20 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 3: 11:40 │ THREE  │       │\n\
+		│  - 13:10 │        │       │\n\
+		├──────────┼────────┼───────┤\n\
+		│ 4: 13:30 │        │ FOUR  │\n\
+		│  - 15:00 │        │       │\n\
+		└──────────┴────────┴───────┘\n";
+
+		let expected_2 = "\
+		┌──────────┬───────┬────────┐\n\
+		│          │ FIRST │ SECOND │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 1: 08:00 │ ONE   │        │\n\
+		│  - 09:30 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 2: 09:50 │       │        │\n\
+		│  - 11:20 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 3: 11:40 │       │ THREE  │\n\
+		│  - 13:10 │       │        │\n\
+		├──────────┼───────┼────────┤\n\
+		│ 4: 13:30 │ FOUR  │        │\n\
+		│  - 15:00 │       │        │\n\
+		└──────────┴───────┴────────┘\n";
+
+		assert!(out.to_string() == expected_1 || out.to_string() == expected_2);
 	}
 }

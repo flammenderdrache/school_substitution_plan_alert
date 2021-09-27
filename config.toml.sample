@@ -1,3 +1,4 @@
 [general]
 discord_token = 'YOUR TOKEN HERE'
 prefix = '-'
+owners = [191594115907977225, 276431762815451138]

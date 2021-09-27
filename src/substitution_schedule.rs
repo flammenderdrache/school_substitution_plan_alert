@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
@@ -12,38 +12,56 @@ use serde::{Deserialize, Serialize};
 
 use crate::tabula_json_parser::parse;
 
-#[derive(Serialize, Deserialize, PartialOrd, PartialEq)]
+#[derive(Serialize, Deserialize, PartialOrd, PartialEq, Debug)]
 pub struct Substitutions {
 	#[serde(rename(serialize = "0"))]
 	#[serde(rename(deserialize = "0"))]
-	pub block_0: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_0: Option<String>,
 	#[serde(rename(serialize = "1"))]
 	#[serde(rename(deserialize = "1"))]
-	pub block_1: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_1: Option<String>,
 	#[serde(rename(serialize = "2"))]
 	#[serde(rename(deserialize = "2"))]
-	pub block_2: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_2: Option<String>,
 	#[serde(rename(serialize = "3"))]
 	#[serde(rename(deserialize = "3"))]
-	pub block_3: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_3: Option<String>,
 	#[serde(rename(serialize = "4"))]
 	#[serde(rename(deserialize = "4"))]
-	pub block_4: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_4: Option<String>,
 	#[serde(rename(serialize = "5"))]
 	#[serde(rename(deserialize = "5"))]
-	pub block_5: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub block_5: Option<String>,
 }
 
 impl Substitutions {
 	pub fn new() -> Self {
 		Self {
-			block_0: "".to_string(),
-			block_1: "".to_string(),
-			block_2: "".to_string(),
-			block_3: "".to_string(),
-			block_4: "".to_string(),
-			block_5: "".to_string(),
+			block_0: None,
+			block_1: None,
+			block_2: None,
+			block_3: None,
+			block_4: None,
+			block_5: None,
 		}
+	}
+	pub fn first_substitution(&self) -> usize {
+		self.as_array().iter().position(|b| b.is_some()).unwrap_or(0)
+	}
+
+	pub fn last_substitution(&self) -> usize {
+		self.as_array().iter().rposition(|b| b.is_some()).unwrap_or(5)
+	}
+
+	pub fn as_array(&self) -> [&Option<String>; 6] {
+		// One could consider also implementing Iterator
+		[&self.block_0, &self.block_1, &self.block_2, &self.block_3, &self.block_4, &self.block_5]
 	}
 }
 
@@ -53,10 +71,10 @@ impl Display for Substitutions {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SubstitutionSchedule {
 	/// The creation date inside the PDF
-	pdf_create_date: i64,
+	pub pdf_create_date: i64,
 	/// The name of the class is the Key and the Value is a Substitutions struct
 	entries: HashMap<String, Substitutions>,
 	/// The time when the struct was created, used for comparing the age
@@ -65,7 +83,7 @@ pub struct SubstitutionSchedule {
 
 impl SubstitutionSchedule {
 	#[allow(clippy::ptr_arg)]
-	pub fn from_table(table: &Vec<Vec<String>>, pdf_create_date: i64) -> Self {
+	fn table_to_substitutions(table: &Vec<Vec<String>>) -> HashMap<String, Substitutions> {
 		let mut entries: HashMap<String, Substitutions> = HashMap::new();
 
 		let classes = &table[0][1..];
@@ -81,7 +99,7 @@ impl SubstitutionSchedule {
 				for (i, substitution_part) in table[row][1..].iter().enumerate() {
 					let substitutions = entries.get_mut(&classes[i]).unwrap();
 
-					let block = match lesson_idx {
+					let block_option = match lesson_idx {
 						0 => &mut substitutions.block_0,
 						1 => &mut substitutions.block_1,
 						2 => &mut substitutions.block_2,
@@ -92,10 +110,10 @@ impl SubstitutionSchedule {
 					};
 
 					if !substitution_part.is_empty() {
-						if block.is_empty() {
-							block.push_str(substitution_part);
-						} else {
+						if let Some(block) = block_option {
 							block.push_str(&format!("\n{}", substitution_part.clone()));
+						} else {
+							block_option.insert(substitution_part.clone());
 						}
 					}
 				}
@@ -109,12 +127,24 @@ impl SubstitutionSchedule {
 			row += 1;
 		}
 
+		entries
+	}
+
+	#[allow(clippy::ptr_arg)]
+	pub fn from_table(tables: &Vec<Vec<Vec<String>>>, pdf_create_date: i64) -> Self {
+		let mut entries = HashMap::new();
+
+		for table in tables {
+			entries.extend(Self::table_to_substitutions(table));
+		}
+
 		let time_now = SystemTime::now();
 		let since_the_epoch = time_now
 			.duration_since(SystemTime::UNIX_EPOCH)
 			.expect("Time got fucked");
+
 		#[allow(clippy::cast_possible_truncation)]
-			let time_millis = since_the_epoch.as_millis() as u64;
+		let time_millis = since_the_epoch.as_millis() as u64;
 
 		Self {
 			pdf_create_date,
@@ -150,6 +180,8 @@ impl SubstitutionSchedule {
 			.arg("-g")
 			.arg("-f")
 			.arg("JSON")
+			.arg("-p")
+			.arg("all")
 			.arg(path)
 			.output()?;
 
@@ -160,6 +192,22 @@ impl SubstitutionSchedule {
 
 	pub fn get_substitutions(&self, class: &str) -> Option<&Substitutions> {
 		self.entries.get(class)
+	}
+
+	pub fn _get_entries(&self) -> &HashMap<String, Substitutions> { &self.entries }
+
+	/// This function skips entries not present in the 'entries' `HashMap`
+	#[allow(clippy::implicit_clone)]
+	pub fn _get_entries_portion(&self, classes: &HashSet<&String>) -> HashMap<String, &Substitutions> {
+		let mut portion = HashMap::new();
+
+		for class in classes {
+			if let Some(substitution) = self.entries.get(*class) {
+				portion.insert(class.to_owned().to_owned(), substitution);
+			}
+		}
+
+		portion
 	}
 }
 
