@@ -311,7 +311,7 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 }
 
 #[command]
-#[aliases("classes", "list_classes", "list")]
+#[aliases("classes", "list_classes", "list", "show")]
 #[description("Lists all the classes whose notifications you subscribed to.")]
 async fn show_classes(ctx: &Context, msg: &Message) -> CommandResult {
 	let user = msg.author.id.0;
