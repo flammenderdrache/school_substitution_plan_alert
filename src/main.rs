@@ -95,6 +95,12 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	temp_pdf_file.write_all(&pdf)?;
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
 
+	if new_schedule.pdf_create_date >= chrono::Local::today()
+		.and_hms_milli(0, 0, 0, 0).timestamp() {
+		std::fs::remove_file(format!("{}/{}.json", PDF_JSON_ROOT_DIR, day)).unwrap_or(());
+		return Ok(())
+	}
+
 	//Open and parse the json file first, instead of at each iteration in the loop
 	let old_schedule_option: Option<SubstitutionSchedule> = {
 		let old_json_file = std::fs::OpenOptions::new()

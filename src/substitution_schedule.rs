@@ -169,10 +169,10 @@ impl SubstitutionSchedule {
 			.collect();
 
 		#[allow(clippy::cast_possible_wrap)]
-			let date = chrono::Date::<Local>::from_utc(
+		let date = chrono::Date::<Local>::from_utc(
 			NaiveDate::from_ymd(date_str[2] as i32, date_str[1], date_str[0]),
 			Utc.fix(),
-		).and_hms(0, 0, 0).timestamp();
+		).and_hms_milli(0, 0, 0, 0).timestamp();
 
 		let output = Command::new("java")
 			.arg("-jar")
