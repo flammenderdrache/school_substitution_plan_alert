@@ -27,6 +27,13 @@ mod config;
 const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
 const USER_AND_CLASSES_SAVE_LOCATION: &str = "./class_registry.json";
+static SOURCE_URLS: [&str; 5] = [
+	"https://buessing.schule/plaene/VertretungsplanA4_Montag.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Dienstag.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Mittwoch.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Donnerstag.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Freitag.pdf",
+];
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -94,6 +101,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let mut temp_pdf_file = std::fs::File::create(temp_file_path).expect("Couldn't create temp pdf file");
 	temp_pdf_file.write_all(&pdf)?;
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
+
 
 	if new_schedule.pdf_create_date < chrono::Local::today().and_hms_milli(0, 0, 0, 0).timestamp_millis() {
 		std::fs::remove_file(format!("{}/{}.json", PDF_JSON_ROOT_DIR, day)).unwrap_or(());
