@@ -113,7 +113,7 @@ impl SubstitutionSchedule {
 						if let Some(block) = block_option {
 							block.push_str(&format!("\n{}", substitution_part.clone()));
 						} else {
-							block_option.insert(substitution_part.clone());
+							let _ = block_option.insert(substitution_part.clone());
 						}
 					}
 				}
