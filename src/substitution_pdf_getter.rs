@@ -3,8 +3,10 @@ use std::time::Duration;
 
 use chrono::{Weekday, Datelike};
 use reqwest::Client;
+use num_traits::PrimInt;
 
 use crate::SOURCE_URLS;
+use std::convert::{TryFrom, TryInto};
 
 ///Enum with the weekdays where a Substitution PDF is available
 #[derive(Debug, PartialOrd, PartialEq, Clone, Copy)]
@@ -48,6 +50,15 @@ impl Display for Weekdays {
 	}
 }
 
+impl ToString for Weekdays {
+	fn to_string(&self) -> String {
+		let mut day = format!("{}", self);
+		day.to_lowercase();
+
+		day
+	}
+}
+
 impl From<Weekday> for Weekdays {
 	fn from(day: Weekday) -> Self {
 		match day {
@@ -60,18 +71,43 @@ impl From<Weekday> for Weekdays {
 	}
 }
 
-impl<T: ToString> From<T> for Weekdays {
-	fn from(string: T) -> Option<Self> {
-		let mut day = string.to_string().as_str();
-		day.make_ascii_lowercase();
+impl TryFrom<u8> for Weekdays {
+	type Error = ();
 
+	fn try_from(day: u8) -> Result<Self, Self::Error> {
 		match day {
-			"monday" => Some(Weekdays::Monday),
-			"tuesday" => Some(Weekdays::Wednesday),
-			"thursday" => Some(Weekdays::Thursday),
-			"friday" => Some(Weekdays::Friday),
-			_ => None,
+			0 => Ok(Weekdays::Monday),
+			1 => Ok(Weekdays::Tuesday),
+			2 => Ok(Weekdays::Wednesday),
+			3 => Ok(Weekdays::Thursday),
+			4 => Ok(Weekdays::Friday),
+			_ => Err(()),
 		}
+	}
+}
+
+impl<T: Into<Weekdays>> TryFrom<T> for Weekdays {
+	type Error = ();
+
+	fn try_from(string: T) -> Result<Self, Self::Error> {
+		let mut day_string = string.to_string().as_str();
+		day_string.make_ascii_lowercase();
+
+		let mut levenshteine: [u8; 5] = [1; 5];
+		let mut day = Weekdays::Monday;
+
+		//consider implementing the iter trait here
+		for i in 0..5 {
+			levenshteine[i] = levenshtein::levenshtein(day_string, &day.to_string()) as u8;
+			day = day.next_day();
+		}
+
+		levenshteine.iter().min()
+			.filter(|distance| (*distance < 5 as &u8))
+			//unwrap is safe, because
+			.map(|day| Weekdays::try_from(day).ok())
+			.flatten()
+			.ok_or(())
 	}
 }
 

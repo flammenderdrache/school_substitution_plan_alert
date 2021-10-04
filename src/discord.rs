@@ -29,6 +29,7 @@ use crate::substitution_pdf_getter::Weekdays;
 use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
 use crate::{USER_AND_CLASSES_SAVE_LOCATION, get_plan_form_disk};
 use crate::SOURCE_URLS;
+use std::iter::FromIterator;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -378,15 +379,43 @@ async fn show_commands(ctx: &Context, msg: &Message, mut args: Args) -> CommandR
 #[example("Mittwoch")]
 #[example("Donnerstag")]
 async fn show_plan(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+	/*
+	This function can be cleaned up a bit, by removing the
+	redundant object creation by making them available in
+	the command context.
+	*/
+
 	let channel = msg.channel_id;
 	let user = msg.author.id;
-	let day = if let Some(day) = args.single() {
-
+	let day = if let Some(day) = args.single::<String>() {
+		if let Ok(school_day) = Weekdays::try_from(day) {
+			school_day
+		} else {
+			channel.say(&ctx.http, format!("{} is not a valid day", day));
+			return Ok(());
+		}
 	} else {
 		Weekdays::today();
 	};
 
-	get_plan_form_disk();
+	let classes_and_users = ClassesAndUsers::new_from_file(Path::new(USER_AND_CLASSES_SAVE_LOCATION));
+	let classes: HashSet<&String> = HashSet::from_iter(classes_and_users.get_user_classes(user.0));
+
+
+	let subs = if let Ok(plan) = get_plan_form_disk(day).ok_or(()) {
+		plan.get_entries_portion(&classes)
+	} else {
+		// this could forward a bug from the 'check_weekday_pdf()' function
+		channel.say(&ctx.http, format!("The plan wasn't refreshed yet\n\nSource: {}", SOURCE_URLS[day as usize]));
+		return Ok(());
+	};
+
+	let table = DiscordNotifier::table_from_substitutions(&subs);
+
+	channel.say(&ctx.http, format!("On {}: ```\n{}\n```Source: {}",
+					day,
+					table,
+					SOURCE_URLS[day as usize]));
 
 	Ok(())
 }
