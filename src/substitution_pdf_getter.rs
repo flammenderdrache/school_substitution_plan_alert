@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::time::Duration;
 
-use chrono::Weekday;
+use chrono::{Weekday, Datelike};
 use reqwest::Client;
 
 use crate::SOURCE_URLS;
@@ -28,6 +28,10 @@ impl Weekdays {
 			Weekdays::Friday => Weekdays::Monday,
 		}
 	}
+
+	pub fn today() -> Self {
+		Self::from(chrono::Local::today().weekday())
+	}
 }
 
 impl Display for Weekdays {
@@ -52,6 +56,21 @@ impl From<Weekday> for Weekdays {
 			Weekday::Thu => Weekdays::Thursday,
 			Weekday::Fri => Weekdays::Friday,
 			_ => Weekdays::Monday,
+		}
+	}
+}
+
+impl<T: ToString> From<T> for Weekdays {
+	fn from(string: T) -> Option<Self> {
+		let mut day = string.to_string().as_str();
+		day.make_ascii_lowercase();
+
+		match day {
+			"monday" => Some(Weekdays::Monday),
+			"tuesday" => Some(Weekdays::Wednesday),
+			"thursday" => Some(Weekdays::Thursday),
+			"friday" => Some(Weekdays::Friday),
+			_ => None,
 		}
 	}
 }

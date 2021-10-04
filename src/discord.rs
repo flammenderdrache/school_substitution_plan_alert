@@ -27,7 +27,7 @@ use sqlx::{Pool, Sqlite};
 use crate::config::Config;
 use crate::substitution_pdf_getter::Weekdays;
 use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
-use crate::USER_AND_CLASSES_SAVE_LOCATION;
+use crate::{USER_AND_CLASSES_SAVE_LOCATION, get_plan_form_disk};
 use crate::SOURCE_URLS;
 
 #[derive(Serialize, Deserialize)]
@@ -274,7 +274,7 @@ impl DiscordNotifier {
 }
 
 #[group]
-#[commands(register, show_classes, unregister)]
+#[commands(register, show_commands, unregister)]
 pub struct General;
 
 #[command]
@@ -359,6 +359,34 @@ async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 	msg.reply_ping(&ctx.http, format!("Removed you from class {}", &class)).await?;
 	info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
 
+
+	Ok(())
+}
+
+#[command("show")]
+#[aliases("request")]
+#[description("Shows either the plan or registered classes.")]
+#[sub_commands(show_plan, show_classes)]
+#[example("plan BGYM191")]
+#[example("classes")]
+async fn show_commands(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+	Ok(())
+}
+
+#[command("plan")]
+#[description("Requests the current plan.")]
+#[example("Mittwoch")]
+#[example("Donnerstag")]
+async fn show_plan(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+	let channel = msg.channel_id;
+	let user = msg.author.id;
+	let day = if let Some(day) = args.single() {
+
+	} else {
+		Weekdays::today();
+	};
+
+	get_plan_form_disk();
 
 	Ok(())
 }

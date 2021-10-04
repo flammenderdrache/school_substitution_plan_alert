@@ -89,6 +89,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	}
 }
 
+fn get_plan_form_disk(day: Weekdays) -> Option<SubstitutionSchedule> {
+	let old_json_file = std::fs::OpenOptions::new()
+		.read(true)
+		.write(false)
+		.open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day));
+
+	if let Ok(old_schedule_json) = old_json_file {
+		match serde_json::from_reader(old_schedule_json) {
+			Ok(old_schedule) => { Some(old_schedule) }
+			Err(why) => {
+				error!("{}", why);
+				panic!("Error parsing the old json");
+			}
+		}
+	} else {
+		None
+	}
+}
+
 #[allow(clippy::or_fun_call)]
 async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>) -> Result<(), Box<dyn std::error::Error>> {
 	info!("Checking PDF for {}", day);
@@ -110,24 +129,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	}
 
 	//Open and parse the json file first, instead of at each iteration in the loop
-	let old_schedule_option: Option<SubstitutionSchedule> = {
-		let old_json_file = std::fs::OpenOptions::new()
-			.read(true)
-			.write(false)
-			.open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day));
-
-		if let Ok(old_schedule_json) = old_json_file {
-			match serde_json::from_reader(old_schedule_json) {
-				Ok(old_schedule) => { Some(old_schedule) }
-				Err(why) => {
-					error!("{}", why);
-					panic!("Error parsing the old json");
-				}
-			}
-		} else {
-			None
-		}
-	};
+	let old_schedule_option = get_plan_form_disk(day);
 
 	let mut to_notify: HashSet<u64> = HashSet::new();
 
