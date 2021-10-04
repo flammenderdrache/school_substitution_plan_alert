@@ -27,6 +27,7 @@ mod config;
 const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
 const USER_AND_CLASSES_SAVE_LOCATION: &str = "./class_registry.json";
+const CLASS_WHITELIST_LOCATION: &str = "./class_whitelist.json";
 static SOURCE_URLS: [&str; 5] = [
 	"https://buessing.schule/plaene/VertretungsplanA4_Montag.pdf",
 	"https://buessing.schule/plaene/VertretungsplanA4_Dienstag.pdf",
@@ -49,6 +50,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let config_file = std::fs::File::open("./config.toml").expect("Error opening config file");
 	let config = Config::from_file(config_file);
+
+	update_whitelisted_classes(&config.general.class_whitelist);
 
 	let discord_notifier = Arc::from(discord::DiscordNotifier::new(config).await);
 
@@ -135,6 +138,9 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 	let classes_and_users_inner = classes_and_users.get_inner_classes_and_users();
 
+	// need to solve file locking first
+	// update_whitelisted_classes(&classes_and_users.get_classes());
+
 	let mut add_to_notify = |class| {
 		for user_id in classes_and_users_inner.get(class).unwrap() { // The unwrap is safe since we know the class exists
 			to_notify.insert(*user_id);
@@ -170,6 +176,32 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	std::fs::remove_file(temp_file_path)?;
 	std::fs::remove_dir(temp_dir_path)?;
 	Ok(())
+}
+
+fn update_whitelisted_classes(classes: &HashSet<String>) {
+	let mut class_whitelist_file = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create(true)
+		.append(false)
+		.open(CLASS_WHITELIST_LOCATION)
+		.expect("Couldn't open the class whitelist file");
+	let mut class_whitelist: HashSet<String> = serde_json::from_reader(&class_whitelist_file).unwrap_or(HashSet::new());
+
+
+	let mut changed = false;
+	for class in classes {
+		if !class_whitelist.contains(class) {
+			class_whitelist.insert(class.clone());
+			changed = true;
+		}
+	}
+
+
+	if changed {
+		let whitelist_json = serde_json::to_string_pretty(&class_whitelist).unwrap();
+		let _ = class_whitelist_file.write_all(whitelist_json.as_bytes());
+	}
 }
 
 fn get_random_name() -> String {

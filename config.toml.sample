@@ -1,4 +1,10 @@
 [general]
 discord_token = 'YOUR TOKEN HERE'
 prefix = '-'
-owners = [191594115907977225, 276431762815451138]
+owners = [191594115907977225, 276431762815451138, 325704347767799808]
+class_whitelist = [
+    'BGYM191',
+    'BGYM192',
+    'BGYM211',
+    '2FOS213'
+]

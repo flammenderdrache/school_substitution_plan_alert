@@ -107,10 +107,10 @@ impl ClassesAndUsers {
 		classes
 	}
 
-	pub fn _get_classes(&self) -> Vec<String> {
-		let mut classes = Vec::new();
+	pub fn _get_classes(&self) -> HashSet<String> {
+		let mut classes = HashSet::new();
 		for class in self.classes_and_users.keys() {
-			classes.push(class.clone());
+			classes.insert(class.clone());
 		}
 		classes
 	}
