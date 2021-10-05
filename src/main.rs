@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 use std::fs::{OpenOptions, File};
-use std::io::{Write, Seek, SeekFrom, Read};
+use std::io::{Write, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
