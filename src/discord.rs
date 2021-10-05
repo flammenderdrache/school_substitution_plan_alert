@@ -299,8 +299,8 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
 	{
 		let class_whitelist_mutex = data.get::<WhitelistFile>().unwrap();
-		let mut whitelist_file = class_whitelist_mutex.lock().await;
-		let class_whitelist: HashSet<String> = serde_json::from_reader(&whitelist_file)?;
+		let whitelist_file = class_whitelist_mutex.lock().await;
+		let class_whitelist: HashSet<String> = serde_json::from_reader(&*whitelist_file)?;
 		if !class_whitelist.contains(&class) {
 			msg.reply(&ctx.http, "Sorry but the specified class is not on the whitelist. Please contact us to request it getting put on the whitelist").await?;
 			return Ok(());
