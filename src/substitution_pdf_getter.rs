@@ -50,14 +50,6 @@ impl Display for Weekdays {
 	}
 }
 
-impl ToString for Weekdays {
-	fn to_string(&self) -> String {
-		let mut day = format!("{}", self);
-		day.to_lowercase();
-
-		day
-	}
-}
 
 impl From<Weekday> for Weekdays {
 	fn from(day: Weekday) -> Self {
@@ -71,10 +63,10 @@ impl From<Weekday> for Weekdays {
 	}
 }
 
-impl TryFrom<u8> for Weekdays {
+impl TryFrom<&u8> for Weekdays {
 	type Error = ();
 
-	fn try_from(day: u8) -> Result<Self, Self::Error> {
+	fn try_from(day: &u8) -> Result<Self, Self::Error> {
 		match day {
 			0 => Ok(Weekdays::Monday),
 			1 => Ok(Weekdays::Tuesday),
@@ -86,24 +78,23 @@ impl TryFrom<u8> for Weekdays {
 	}
 }
 
-impl<T: Into<Weekdays>> TryFrom<T> for Weekdays {
+impl TryFrom<&str> for Weekdays {
 	type Error = ();
 
-	fn try_from(string: T) -> Result<Self, Self::Error> {
-		let mut day_string = string.to_string().as_str();
-		day_string.make_ascii_lowercase();
+	fn try_from(string: &str) -> Result<Self, Self::Error> {
+		let input = string.to_string().to_lowercase();
 
 		let mut levenshteine: [u8; 5] = [1; 5];
 		let mut day = Weekdays::Monday;
 
 		//consider implementing the iter trait here
 		for i in 0..5 {
-			levenshteine[i] = levenshtein::levenshtein(day_string, &day.to_string()) as u8;
+			levenshteine[i] = levenshtein::levenshtein(&input, &day.to_string().to_lowercase()) as u8;
 			day = day.next_day();
 		}
 
 		levenshteine.iter().min()
-			.filter(|distance| (*distance < 5 as &u8))
+			.filter(|distance| (**distance < 5 as u8))
 			//unwrap is safe, because
 			.map(|day| Weekdays::try_from(day).ok())
 			.flatten()

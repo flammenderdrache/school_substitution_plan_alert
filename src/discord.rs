@@ -30,6 +30,7 @@ use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
 use crate::{USER_AND_CLASSES_SAVE_LOCATION, get_plan_form_disk};
 use crate::SOURCE_URLS;
 use std::iter::FromIterator;
+use std::convert::TryFrom;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
@@ -95,13 +96,13 @@ impl ClassesAndUsers {
 		successful
 	}
 
-	pub fn get_user_classes(&self, user_id: u64) -> Vec<String> {
+	pub fn get_user_classes(&self, user_id: u64) -> Vec<&String> {
 		let mut classes = Vec::new();
 		let classes_and_users = &self.classes_and_users;
 
 		for (class, user_ids) in classes_and_users {
 			if user_ids.contains(&user_id) {
-				classes.push(class.clone());
+				classes.push(class);
 			}
 		}
 
@@ -224,7 +225,7 @@ impl DiscordNotifier {
 	}
 
 	#[allow(clippy::needless_range_loop)]
-	fn table_from_substitutions(substitutions: &HashMap<String, &Substitutions>) -> Table {
+	fn table_from_substitutions(substitutions: &HashMap<&String, &Substitutions>) -> Table {
 		let hour_marks = [
 			"0: 07:15\n - 08:00",
 			"1: 08:00\n - 09:30",
@@ -311,7 +312,7 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 	Ok(())
 }
 
-#[command]
+#[command("classes")]
 #[aliases("classes", "list_classes", "list", "show")]
 #[description("Lists all the classes whose notifications you subscribed to.")]
 async fn show_classes(ctx: &Context, msg: &Message) -> CommandResult {
@@ -327,7 +328,7 @@ async fn show_classes(ctx: &Context, msg: &Message) -> CommandResult {
 				if classes.is_empty() {
 					"You haven't registered for updates for any class".to_owned()
 				} else {
-					classes.join("\n")
+					classes.iter().map(|s| s.to_owned().to_owned()).collect::<Vec<String>>().join("\n")
 				}
 			)
 		}),
@@ -379,6 +380,10 @@ async fn show_commands(ctx: &Context, msg: &Message, mut args: Args) -> CommandR
 #[example("Mittwoch")]
 #[example("Donnerstag")]
 async fn show_plan(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+	Ok(())
+}
+
+async fn get_plan(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 	/*
 	This function can be cleaned up a bit, by removing the
 	redundant object creation by making them available in
@@ -386,36 +391,37 @@ async fn show_plan(ctx: &Context, msg: &Message, mut args: Args) -> CommandResul
 	*/
 
 	let channel = msg.channel_id;
+
 	let user = msg.author.id;
-	let day = if let Some(day) = args.single::<String>() {
-		if let Ok(school_day) = Weekdays::try_from(day) {
+	let day = if let Ok(day) = args.single::<String>() {
+		if let Ok(school_day) = Weekdays::try_from(day.as_str()) {
 			school_day
 		} else {
-			channel.say(&ctx.http, format!("{} is not a valid day", day));
+			channel.say(&ctx.http, format!("{} is not a valid day", day)).await;
 			return Ok(());
 		}
 	} else {
-		Weekdays::today();
+		Weekdays::today()
 	};
 
 	let classes_and_users = ClassesAndUsers::new_from_file(Path::new(USER_AND_CLASSES_SAVE_LOCATION));
 	let classes: HashSet<&String> = HashSet::from_iter(classes_and_users.get_user_classes(user.0));
 
+	let table;
 
-	let subs = if let Ok(plan) = get_plan_form_disk(day).ok_or(()) {
-		plan.get_entries_portion(&classes)
+	if let Some(plan) = get_plan_form_disk(day) {
+		table = DiscordNotifier::table_from_substitutions(&plan.get_entries_portion(&classes));
+
+		channel.say(&ctx.http, format!("On {}: ```\n{}\n\n```Source: {}",
+									   day,
+									   table,
+									   SOURCE_URLS[day as usize]
+		)).await;
 	} else {
 		// this could forward a bug from the 'check_weekday_pdf()' function
 		channel.say(&ctx.http, format!("The plan wasn't refreshed yet\n\nSource: {}", SOURCE_URLS[day as usize]));
 		return Ok(());
 	};
-
-	let table = DiscordNotifier::table_from_substitutions(&subs);
-
-	channel.say(&ctx.http, format!("On {}: ```\n{}\n```Source: {}",
-					day,
-					table,
-					SOURCE_URLS[day as usize]));
 
 	Ok(())
 }

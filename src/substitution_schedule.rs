@@ -199,12 +199,12 @@ impl SubstitutionSchedule {
 
 	/// This function skips entries not present in the 'entries' `HashMap`
 	#[allow(clippy::implicit_clone)]
-	pub fn get_entries_portion(&self, classes: &HashSet<&String>) -> HashMap<String, &Substitutions> {
+	pub fn get_entries_portion<'a>(&self, classes: &HashSet<&'a String>) -> HashMap<&'a String, &Substitutions> {
 		let mut portion = HashMap::new();
 
 		for class in classes {
 			if let Some(substitution) = self.entries.get(*class) {
-				portion.insert(class.to_owned().to_owned(), substitution);
+				portion.insert(*class, substitution);
 			}
 		}
 
