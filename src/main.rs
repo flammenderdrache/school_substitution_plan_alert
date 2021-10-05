@@ -2,8 +2,8 @@
 #![allow(clippy::let_underscore_drop)]
 
 use std::collections::HashSet;
-use std::fs::OpenOptions;
-use std::io::Write;
+use std::fs::{OpenOptions, File};
+use std::io::{Write, Seek, SeekFrom, Read};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,6 +17,8 @@ use crate::config::Config;
 use crate::discord::{ClassesAndUsers, DiscordNotifier};
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
+use serenity::prelude::TypeMapKey;
+use tokio::sync::Mutex;
 
 mod substitution_schedule;
 mod tabula_json_parser;
@@ -51,9 +53,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let config_file = std::fs::File::open("./config.toml").expect("Error opening config file");
 	let config = Config::from_file(config_file);
 
-	update_whitelisted_classes(&config.general.class_whitelist);
+	let mut whitelist_config_file = std::fs::OpenOptions::new()
+		.read(true)
+		.write(true)
+		.create(true)
+		.open(CLASS_WHITELIST_LOCATION)
+		.expect("Couldn't open whitelist config file");
+
+	update_whitelisted_classes(&config.general.class_whitelist, &mut whitelist_config_file)?;
 
 	let discord_notifier = Arc::from(discord::DiscordNotifier::new(config).await);
+
+	{
+		let file_mutex = Arc::from(Mutex::new(whitelist_config_file));
+
+		let mut data = discord_notifier.data.write().await;
+		data.insert::<WhitelistFile>(file_mutex);
+	}
 
 	let pdf_getter = Arc::new(SubstitutionPDFGetter::default());
 
@@ -109,7 +125,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	if new_schedule.pdf_create_date < chrono::Local::today().and_hms_milli(0, 0, 0, 0).timestamp_millis() {
 		log::info!("Deleting old pdf for day {}", &day);
 		std::fs::remove_file(format!("{}/{}.json", PDF_JSON_ROOT_DIR, day)).unwrap_or(());
-		return Ok(())
+		return Ok(());
 	}
 
 	//Open and parse the json file first, instead of at each iteration in the loop
@@ -135,11 +151,14 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let mut to_notify: HashSet<u64> = HashSet::new();
 
 	let data = discord.data.read().await;
+
 	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 	let classes_and_users_inner = classes_and_users.get_inner_classes_and_users();
 
-	// need to solve file locking first
-	// update_whitelisted_classes(&classes_and_users.get_classes());
+	let whitelist_file_mutex = data.get::<WhitelistFile>().unwrap();
+	let mut whitelist_file = whitelist_file_mutex.lock().await;
+	update_whitelisted_classes(&classes_and_users.get_classes(), &mut whitelist_file)?;
+
 
 	let mut add_to_notify = |class| {
 		for user_id in classes_and_users_inner.get(class).unwrap() { // The unwrap is safe since we know the class exists
@@ -175,18 +194,13 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 
 	std::fs::remove_file(temp_file_path)?;
 	std::fs::remove_dir(temp_dir_path)?;
+
 	Ok(())
 }
 
-fn update_whitelisted_classes(classes: &HashSet<String>) {
-	let mut class_whitelist_file = std::fs::OpenOptions::new()
-		.read(true)
-		.write(true)
-		.create(true)
-		.append(false)
-		.open(CLASS_WHITELIST_LOCATION)
-		.expect("Couldn't open the class whitelist file");
-	let mut class_whitelist: HashSet<String> = serde_json::from_reader(&class_whitelist_file).unwrap_or(HashSet::new());
+fn update_whitelisted_classes(classes: &HashSet<String>, class_whitelist_file: &mut File) -> Result<(), Box<dyn std::error::Error>> {
+	class_whitelist_file.seek(SeekFrom::Start(0))?; //Make sure the File Read/Write cursor is at the beginning of the file before reading
+	let mut class_whitelist: HashSet<String> = serde_json::from_reader(&*class_whitelist_file).unwrap();
 
 
 	let mut changed = false;
@@ -200,8 +214,12 @@ fn update_whitelisted_classes(classes: &HashSet<String>) {
 
 	if changed {
 		let whitelist_json = serde_json::to_string_pretty(&class_whitelist).unwrap();
-		let _ = class_whitelist_file.write_all(whitelist_json.as_bytes());
+		class_whitelist_file.set_len(0)?;
+		class_whitelist_file.seek(SeekFrom::Start(0))?;
+		class_whitelist_file.write_all(whitelist_json.as_bytes())?;
 	}
+
+	Ok(())
 }
 
 fn get_random_name() -> String {
@@ -215,4 +233,10 @@ fn make_temp_dir() -> String {
 	let temp_dir = format!("{}/{}", TEMP_ROOT_DIR, temp_dir_name);
 	std::fs::create_dir(Path::new(&temp_dir)).expect("Could not create temp dir");
 	temp_dir
+}
+
+struct WhitelistFile {}
+
+impl TypeMapKey for WhitelistFile {
+	type Value = Arc<Mutex<File>>;
 }
