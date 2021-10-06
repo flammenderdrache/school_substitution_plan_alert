@@ -27,7 +27,7 @@ use sqlx::{Pool, Sqlite};
 use crate::config::Config;
 use crate::substitution_pdf_getter::Weekdays;
 use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
-use crate::USER_AND_CLASSES_SAVE_LOCATION;
+use crate::{USER_AND_CLASSES_SAVE_LOCATION, WhitelistFile};
 use crate::SOURCE_URLS;
 
 #[derive(Serialize, Deserialize)]
@@ -107,10 +107,10 @@ impl ClassesAndUsers {
 		classes
 	}
 
-	pub fn _get_classes(&self) -> Vec<String> {
-		let mut classes = Vec::new();
+	pub fn _get_classes(&self) -> HashSet<String> {
+		let mut classes = HashSet::new();
 		for class in self.classes_and_users.keys() {
-			classes.push(class.clone());
+			classes.insert(class.clone());
 		}
 		classes
 	}
@@ -296,6 +296,17 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 	}
 
 	let mut data = ctx.data.write().await;
+
+	{
+		let class_whitelist_mutex = data.get::<WhitelistFile>().unwrap();
+		let whitelist_file = class_whitelist_mutex.lock().await;
+		let class_whitelist: HashSet<String> = serde_json::from_reader(&*whitelist_file)?;
+		if !class_whitelist.contains(&class) {
+			msg.reply(&ctx.http, "Sorry but the specified class is not on the whitelist. Please contact us to request it getting put on the whitelist").await?;
+			return Ok(());
+		}
+	}
+
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
 	classes_and_users.insert_user(class.clone(), user, Path::new(USER_AND_CLASSES_SAVE_LOCATION));
 
