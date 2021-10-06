@@ -15,6 +15,7 @@ pub struct General {
 	pub discord_token: String,
 	pub prefix: String,
 	pub owners: HashSet<UserId>,
+	#[serde(default)]
 	pub class_whitelist: HashSet<String>, //Pre defined classes, these are loaded into the whitelist on startup.
 }
 
