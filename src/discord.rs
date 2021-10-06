@@ -377,13 +377,9 @@ async fn show_commands(ctx: &Context, msg: &Message, mut args: Args) -> CommandR
 
 #[command("plan")]
 #[description("Requests the current plan.")]
-#[example("Mittwoch")]
+#[example("Mittwoch")]j
 #[example("Donnerstag")]
 async fn show_plan(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-	Ok(())
-}
-
-async fn get_plan(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 	/*
 	This function can be cleaned up a bit, by removing the
 	redundant object creation by making them available in
@@ -392,20 +388,30 @@ async fn get_plan(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
 	let channel = msg.channel_id;
 
-	let user = msg.author.id;
-	let day = if let Ok(day) = args.single::<String>() {
-		if let Ok(school_day) = Weekdays::try_from(day.as_str()) {
-			school_day
+	let classes_and_users = ClassesAndUsers::new_from_file(Path::new(USER_AND_CLASSES_SAVE_LOCATION));
+	let mut classes: HashSet<&str> = HashSet::new();
+
+	if let Some(class) = args.rest().split("of ").nth(1) {
+		classes.insert(class);
+		classes
+	} else {
+		HashSet::from_iter(
+			classes_and_users.get_user_classes(msg.author.id.0)
+				.iter()
+				.map(|s| *s.as_str())
+		)
+	};
+
+	let day = if let Some(school_day) = args.rest().split("on ").nth(1) {
+		if let Ok(day) = Weekdays::try_from(school_day) {
+			day
 		} else {
-			channel.say(&ctx.http, format!("{} is not a valid day", day)).await;
+			channel.say(&ctx.http, format!("{} is not a valid day", school_day)).await;
 			return Ok(());
 		}
 	} else {
 		Weekdays::today()
 	};
-
-	let classes_and_users = ClassesAndUsers::new_from_file(Path::new(USER_AND_CLASSES_SAVE_LOCATION));
-	let classes: HashSet<&String> = HashSet::from_iter(classes_and_users.get_user_classes(user.0));
 
 	let table;
 
