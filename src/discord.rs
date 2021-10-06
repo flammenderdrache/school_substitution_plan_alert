@@ -107,7 +107,7 @@ impl ClassesAndUsers {
 		classes
 	}
 
-	pub fn get_classes(&self) -> HashSet<String> {
+	pub fn _get_classes(&self) -> HashSet<String> {
 		let mut classes = HashSet::new();
 		for class in self.classes_and_users.keys() {
 			classes.insert(class.clone());

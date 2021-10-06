@@ -128,6 +128,14 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 		return Ok(());
 	}
 
+
+	let data = discord.data.read().await;
+
+	let whitelist_file_mutex = data.get::<WhitelistFile>().unwrap();
+	let mut whitelist_file = whitelist_file_mutex.lock().await;
+	update_whitelisted_classes(&new_schedule.get_classes(), &mut whitelist_file)?;
+
+
 	//Open and parse the json file first, instead of at each iteration in the loop
 	let old_schedule_option: Option<SubstitutionSchedule> = {
 		let old_json_file = std::fs::OpenOptions::new()
@@ -150,14 +158,8 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 
 	let mut to_notify: HashSet<u64> = HashSet::new();
 
-	let data = discord.data.read().await;
-
 	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 	let classes_and_users_inner = classes_and_users.get_inner_classes_and_users();
-
-	let whitelist_file_mutex = data.get::<WhitelistFile>().unwrap();
-	let mut whitelist_file = whitelist_file_mutex.lock().await;
-	update_whitelisted_classes(&classes_and_users.get_classes(), &mut whitelist_file)?;
 
 
 	let mut add_to_notify = |class| {
@@ -200,8 +202,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 
 fn update_whitelisted_classes(classes: &HashSet<String>, class_whitelist_file: &mut File) -> Result<(), Box<dyn std::error::Error>> {
 	class_whitelist_file.seek(SeekFrom::Start(0))?; //Make sure the File Read/Write cursor is at the beginning of the file before reading
-	let mut class_whitelist: HashSet<String> = serde_json::from_reader(&*class_whitelist_file).unwrap();
-
+	let mut class_whitelist: HashSet<String> = serde_json::from_reader(&*class_whitelist_file).unwrap_or_default();
 
 	let mut changed = false;
 	for class in classes {
