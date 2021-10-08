@@ -22,7 +22,6 @@ use serenity::client::bridge::gateway::{GatewayIntents, ShardManager};
 use serenity::framework::standard::{Args, CommandGroup, help_commands, HelpOptions};
 use serenity::http::Http;
 use serenity::model::prelude::{Activity, OnlineStatus, Ready, UserId};
-use sqlx::{Pool, Sqlite};
 
 use crate::config::Config;
 use crate::substitution_pdf_getter::Weekdays;
@@ -372,12 +371,6 @@ async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 
 
 	Ok(())
-}
-
-pub struct ConnectionPool;
-
-impl TypeMapKey for ConnectionPool {
-	type Value = Pool<Sqlite>;
 }
 
 struct ShardManagerContainer;
