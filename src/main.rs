@@ -25,6 +25,7 @@ mod tabula_json_parser;
 mod substitution_pdf_getter;
 mod discord;
 mod config;
+mod data;
 
 const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
