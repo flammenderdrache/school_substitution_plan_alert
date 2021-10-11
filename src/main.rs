@@ -26,6 +26,7 @@ mod substitution_pdf_getter;
 mod discord;
 mod config;
 mod data;
+mod util;
 
 const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
@@ -112,8 +113,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[allow(clippy::or_fun_call)]
 async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>) -> Result<(), Box<dyn std::error::Error>> {
 	info!("Checking PDF for {}", day);
-	let temp_dir_path = make_temp_dir();
-	let temp_file_name = get_random_name();
+	let temp_dir_path = util::make_temp_dir();
+	let temp_file_name = util::get_random_name();
 	let temp_file_path = format!("{}/{}", temp_dir_path, temp_file_name);
 	let temp_file_path = Path::new(&temp_file_path);
 
@@ -222,19 +223,6 @@ fn update_whitelisted_classes(classes: &HashSet<String>, class_whitelist_file: &
 	}
 
 	Ok(())
-}
-
-fn get_random_name() -> String {
-	trace!("Returning random name");
-	format!("{}", Uuid::new_v4())
-}
-
-fn make_temp_dir() -> String {
-	trace!("Creating temp directory");
-	let temp_dir_name = get_random_name();
-	let temp_dir = format!("{}/{}", TEMP_ROOT_DIR, temp_dir_name);
-	std::fs::create_dir(Path::new(&temp_dir)).expect("Could not create temp dir");
-	temp_dir
 }
 
 struct WhitelistFile {}
