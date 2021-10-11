@@ -2,23 +2,23 @@
 #![allow(clippy::let_underscore_drop)]
 
 use std::collections::HashSet;
-use std::fs::{OpenOptions, File};
-use std::io::{Write, Seek, SeekFrom};
+use std::fs::{File, OpenOptions};
+use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{Datelike, DateTime, Local};
 use log::{debug, error, info, LevelFilter, trace};
+use serenity::prelude::TypeMapKey;
 use simple_logger::SimpleLogger;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::config::Config;
 use crate::discord::{ClassesAndUsers, DiscordNotifier};
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
-use serenity::prelude::TypeMapKey;
-use tokio::sync::Mutex;
 
 mod substitution_schedule;
 mod tabula_json_parser;
