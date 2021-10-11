@@ -66,6 +66,7 @@ impl TypeMapKey for Config {
 #[cfg(test)]
 mod tests {
 	use std::collections::HashSet;
+
 	use serenity::model::id::UserId;
 
 	#[test]
