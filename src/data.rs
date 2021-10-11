@@ -63,6 +63,8 @@ mod tests {
 	fn test_store_and_retrieve_json() {
 		let data_directory = format!("/tmp/test-{}", get_random_name());
 
+		std::fs::create_dir_all(data_directory.clone());
+
 		let data = Data::default(data_directory);
 
 		let json = "{ test: \"this is a test\"".to_owned();
