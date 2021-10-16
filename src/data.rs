@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 
@@ -49,6 +50,14 @@ impl DataStore for Data {
 		old_json_file.read_to_string(&mut content)?;
 
 		Ok(content)
+	}
+
+	fn store_class_whitelist(&self, class_whitelist: &str) -> Result<(), Box<dyn Error>> {
+		todo!()
+	}
+
+	fn get_class_whitelist(&self) -> Result<String, Box<dyn Error>> {
+		todo!()
 	}
 }
 
