@@ -58,6 +58,12 @@ pub trait DataStore {
 
 	/// Retrieves a pdf json from the datastore
 	fn get_pdf_json(&self, weekday: Weekdays) -> Result<String, Box<dyn std::error::Error>>;
+
+	/// Stores the class whitelist
+	fn store_class_whitelist(&self, class_whitelist: &str) -> Result<(), Box<dyn std::error::Error>>;
+
+	/// Retrieves the class whitelist from the datastore
+	fn get_class_whitelist(&self) -> Result<String, Box<dyn std::error::Error>>;
 }
 
 mod tests {
