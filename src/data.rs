@@ -3,17 +3,22 @@ use std::io::{Read, Write};
 
 use crate::substitution_pdf_getter::Weekdays;
 
+const PDF_JSON_DIR_NAME: &str = "pdf_jsons";
+
 pub struct Data {
 	data_directory: String,
 	pdf_json_dir: String,
 }
 
 impl Data {
-	pub fn default(data_directory: String) -> Self {
-		Self {
+	pub fn default(data_directory: String) -> Result<Self, Box<dyn std::error::Error>> {
+		std::fs::create_dir_all(data_directory.as_str())?;
+		std::fs::create_dir_all(format!("{}/{}", data_directory, PDF_JSON_DIR_NAME))?;
+
+		Ok(Self {
 			data_directory,
 			pdf_json_dir: "pdf_jsons".to_owned(),
-		}
+		})
 	}
 }
 
@@ -24,7 +29,7 @@ impl DataStore for Data {
 			.write(true)
 			.create(true)
 			.truncate(true)
-			.open(format!("{}/{}/{}.json", self.data_directory, "pdf_jsons", weekday))
+			.open(format!("{}/{}/{}.json", self.data_directory, PDF_JSON_DIR_NAME, weekday))
 			.expect("Couldn't open file to write new json");
 
 		substitution_file.write_all(pdf_json.as_bytes())?;
@@ -37,7 +42,7 @@ impl DataStore for Data {
 		let mut old_json_file = std::fs::OpenOptions::new()
 			.read(true)
 			.write(false)
-			.open(format!("./{}/{}/{}.json", self.data_directory, "pdf_jsons", weekday))?;
+			.open(format!("{}/{}/{}.json", self.data_directory, PDF_JSON_DIR_NAME, weekday))?;
 
 		let mut content = String::new();
 
@@ -57,17 +62,18 @@ pub trait DataStore {
 
 mod tests {
 	use crate::util::get_random_name;
+
 	use super::*;
 
 	#[test]
 	fn test_store_and_retrieve_json() {
 		let data_directory = format!("/tmp/test-{}", get_random_name());
 
-		std::fs::create_dir_all(data_directory.clone());
+		std::fs::create_dir_all(data_directory.clone()).unwrap();
 
-		let data = Data::default(data_directory);
+		let data = Data::default(data_directory).unwrap();
 
-		let json = "{ test: \"this is a test\"".to_owned();
+		let json = "{ test: \"this is a test\" }".to_owned();
 
 		data.store_pdf_json(Weekdays::Monday, json.clone()).unwrap();
 
