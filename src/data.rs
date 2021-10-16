@@ -24,7 +24,7 @@ impl Data {
 
 impl DataStore for Data {
 	/// Stores the given PDF Json in a file
-	fn store_pdf_json(&self, weekday: Weekdays, pdf_json: String) -> Result<(), Box<dyn std::error::Error>> {
+	fn store_pdf_json(&self, weekday: Weekdays, pdf_json: &str) -> Result<(), Box<dyn std::error::Error>> {
 		let mut substitution_file = OpenOptions::new()
 			.write(true)
 			.create(true)
@@ -54,7 +54,7 @@ impl DataStore for Data {
 
 pub trait DataStore {
 	/// Stores the pdf json
-	fn store_pdf_json(&self, weekday: Weekdays, pdf_json: String) -> Result<(), Box<dyn std::error::Error>>;
+	fn store_pdf_json(&self, weekday: Weekdays, pdf_json: &str) -> Result<(), Box<dyn std::error::Error>>;
 
 	/// Retrieves a pdf json from the datastore
 	fn get_pdf_json(&self, weekday: Weekdays) -> Result<String, Box<dyn std::error::Error>>;
@@ -75,7 +75,7 @@ mod tests {
 
 		let json = "{ test: \"this is a test\" }".to_owned();
 
-		data.store_pdf_json(Weekdays::Monday, json.clone()).unwrap();
+		data.store_pdf_json(Weekdays::Monday, json.as_str()).unwrap();
 
 		assert_eq!(json, data.get_pdf_json(Weekdays::Monday).unwrap())
 	}
