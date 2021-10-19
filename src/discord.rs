@@ -29,6 +29,7 @@ use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
 use crate::{USER_AND_CLASSES_SAVE_LOCATION, WhitelistFile};
 use crate::SOURCE_URLS;
 
+//TODO Move to Data struct
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
 	classes_and_users: HashMap<String, HashSet<u64>>,
