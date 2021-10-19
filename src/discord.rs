@@ -30,6 +30,7 @@ use crate::{USER_AND_CLASSES_SAVE_LOCATION, WhitelistFile};
 use crate::SOURCE_URLS;
 
 //TODO Move file read/write logic to Data struct
+//Maybe accept something that implements datastore for reading and writing
 #[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
 	classes_and_users: HashMap<String, HashSet<u64>>,
