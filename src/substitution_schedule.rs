@@ -9,6 +9,7 @@ use std::time::SystemTime;
 use chrono::{Local, NaiveDate, Offset, Utc};
 use lopdf::Document;
 use serde::{Deserialize, Serialize};
+use crate::error::StringError;
 
 use crate::tabula_json_parser::parse;
 
@@ -154,7 +155,11 @@ impl SubstitutionSchedule {
 	}
 
 	pub fn from_pdf<T: AsRef<Path> + AsRef<OsStr>>(path: T) -> Result<Self, Box<dyn std::error::Error>> {
-		let pdf = Document::load(&path).map_err(|_| return Err("PDF Empty or malformed"))?;
+		// let pdf = Document::load(&path).map_err(|_| return Err(StringError::new("PDF is empty or malformed.")))?;
+		let pdf = match Document::load(&path) {
+			Ok(pdf) => pdf,
+			Err(_) => return Err(Box::new(StringError::new("PDF is empty or malformed."))),
+		};
 		let pdf = pdf.extract_text(&[1])?;
 
 		let date_idx_start = pdf.find("Datum: ").ok_or("date not found")?;
