@@ -154,7 +154,8 @@ impl SubstitutionSchedule {
 	}
 
 	pub fn from_pdf<T: AsRef<Path> + AsRef<OsStr>>(path: T) -> Result<Self, Box<dyn std::error::Error>> {
-		let pdf = Document::load(&path).unwrap().extract_text(&[1]).unwrap();
+		let pdf = Document::load(&path).map_err(|_| return Err("PDF Empty or malformed"))?;
+		let pdf = pdf.extract_text(&[1])?;
 
 		let date_idx_start = pdf.find("Datum: ").ok_or("date not found")?;
 		let date_idx_end = pdf[date_idx_start..].find('\n').ok_or("date end not found")? + date_idx_start;
