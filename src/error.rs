@@ -13,7 +13,7 @@ impl StringError {
 
 impl Display for StringError {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		write!(f, "PDF was empty or malformed")
+		write!(f,"{}", self.message)
 	}
 }
 
