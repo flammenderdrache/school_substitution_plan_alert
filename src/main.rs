@@ -27,6 +27,7 @@ mod discord;
 mod config;
 mod data;
 mod util;
+mod error;
 
 const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
