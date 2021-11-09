@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::io::{Seek, Write};
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 

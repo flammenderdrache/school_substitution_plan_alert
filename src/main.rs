@@ -13,7 +13,6 @@ use log::{debug, error, info, LevelFilter, trace};
 use serenity::prelude::TypeMapKey;
 use simple_logger::SimpleLogger;
 use tokio::sync::Mutex;
-use uuid::Uuid;
 
 use crate::config::Config;
 use crate::discord::{ClassesAndUsers, DiscordNotifier};

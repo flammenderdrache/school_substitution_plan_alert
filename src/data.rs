@@ -89,7 +89,7 @@ impl DataStore for Data {
 
 	fn get_class_whitelist(&self) -> Result<HashSet<String>, Box<dyn Error + '_>> {
 		let mut class_whitelist_file = self.whitelist_file.lock()?;
-		class_whitelist_file.seek(SeekFrom::Start(0));
+		class_whitelist_file.seek(SeekFrom::Start(0))?;
 		let class_whitelist: HashSet<String> = serde_json::from_reader(&*class_whitelist_file)?;
 		Ok(class_whitelist)
 	}
