@@ -299,6 +299,7 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 	let mut data = ctx.data.write().await;
 
 	{
+		//TODO replace with getting class whitelist from datastore
 		let class_whitelist_mutex = data.get::<WhitelistFile>().unwrap();
 		let mut whitelist_file = class_whitelist_mutex.lock().await;
 		whitelist_file.seek(SeekFrom::Start(0))?;
