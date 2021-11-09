@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 use std::fs::{File, OpenOptions};
-use std::io::{Seek, SeekFrom, Write};
+use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,6 +15,7 @@ use simple_logger::SimpleLogger;
 use tokio::sync::Mutex;
 
 use crate::config::Config;
+use crate::data::{Data, DataStore};
 use crate::discord::{ClassesAndUsers, DiscordNotifier};
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
@@ -54,15 +55,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let config_file = std::fs::File::open("./config.toml").expect("Error opening config file");
 	let config = Config::from_file(config_file);
+	let datastore = Arc::new(Data::new("./data".to_owned())?);
 
-	let mut whitelist_config_file = std::fs::OpenOptions::new()
+	let whitelist_config_file = std::fs::OpenOptions::new()
 		.read(true)
 		.write(true)
 		.create(true)
 		.open(CLASS_WHITELIST_LOCATION)
 		.expect("Couldn't open whitelist config file");
 
-	update_whitelisted_classes(&config.general.class_whitelist, &mut whitelist_config_file)?;
+	// update_whitelisted_classes(&config.general.class_whitelist, &mut whitelist_config_file)?;
+
+	if let Err(why) = datastore.update_class_whitelist(&config.general.class_whitelist) {
+		log::error!("{}", why)
+	}
 
 	let discord_notifier = Arc::from(discord::DiscordNotifier::new(config).await);
 
@@ -89,16 +95,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 		let pdf_getter_arc = pdf_getter.clone();
 		let discord_notifier_arc = discord_notifier.clone();
+		let datastore_arc = datastore.clone();
 		tokio::spawn(async move {
-			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter_arc, discord_notifier_arc).await {
+			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter_arc, discord_notifier_arc, datastore_arc).await {
 				error!("{}", why);
 			}
 		});
 
 		let pdf_getter_arc = pdf_getter.clone();
 		let discord_notifier_arc = discord_notifier.clone();
+		let datastore_arc = datastore.clone();
 		tokio::spawn(async move {
-			if let Err(why) = check_weekday_pdf(day_after, pdf_getter_arc, discord_notifier_arc).await {
+			if let Err(why) = check_weekday_pdf(day_after, pdf_getter_arc, discord_notifier_arc, datastore_arc).await {
 				error!("{}", why);
 			}
 		});
@@ -111,7 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[allow(clippy::or_fun_call)]
-async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>) -> Result<(), Box<dyn std::error::Error>> {
+async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>, datastore: Arc<Data>) -> Result<(), Box<dyn std::error::Error>> {
 	info!("Checking PDF for {}", day);
 	let temp_dir_path = util::make_temp_dir();
 	let temp_file_name = util::get_random_name();
@@ -133,10 +141,9 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 
 	let data = discord.data.read().await;
 
-	let whitelist_file_mutex = data.get::<WhitelistFile>().unwrap();
-	let mut whitelist_file = whitelist_file_mutex.lock().await;
-	update_whitelisted_classes(&new_schedule.get_classes(), &mut whitelist_file)?;
-
+	if let Err(why) = datastore.update_class_whitelist(&new_schedule.get_classes()) {
+		log::error!("{}", why);
+	}
 
 	//Open and parse the json file first, instead of at each iteration in the loop
 	let old_schedule_option: Option<SubstitutionSchedule> = {
@@ -202,28 +209,28 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	Ok(())
 }
 
-fn update_whitelisted_classes(classes: &HashSet<String>, class_whitelist_file: &mut File) -> Result<(), Box<dyn std::error::Error>> {
-	class_whitelist_file.seek(SeekFrom::Start(0))?; //Make sure the File Read/Write cursor is at the beginning of the file before reading
-	let mut class_whitelist: HashSet<String> = serde_json::from_reader(&*class_whitelist_file).unwrap_or_default();
-
-	let mut changed = false;
-	for class in classes {
-		if !class_whitelist.contains(class) {
-			class_whitelist.insert(class.clone());
-			changed = true;
-		}
-	}
-
-
-	if changed {
-		let whitelist_json = serde_json::to_string_pretty(&class_whitelist).unwrap();
-		class_whitelist_file.set_len(0)?;
-		class_whitelist_file.seek(SeekFrom::Start(0))?;
-		class_whitelist_file.write_all(whitelist_json.as_bytes())?;
-	}
-
-	Ok(())
-}
+// fn update_whitelisted_classes(classes: &HashSet<String>, class_whitelist_file: &mut File) -> Result<(), Box<dyn std::error::Error>> {
+// 	class_whitelist_file.seek(SeekFrom::Start(0))?; //Make sure the File Read/Write cursor is at the beginning of the file before reading
+// 	let mut class_whitelist: HashSet<String> = serde_json::from_reader(&*class_whitelist_file).unwrap_or_default();
+//
+// 	let mut changed = false;
+// 	for class in classes {
+// 		if !class_whitelist.contains(class) {
+// 			class_whitelist.insert(class.clone());
+// 			changed = true;
+// 		}
+// 	}
+//
+//
+// 	if changed {
+// 		let whitelist_json = serde_json::to_string_pretty(&class_whitelist).unwrap();
+// 		class_whitelist_file.set_len(0)?;
+// 		class_whitelist_file.seek(SeekFrom::Start(0))?;
+// 		class_whitelist_file.write_all(whitelist_json.as_bytes())?;
+// 	}
+//
+// 	Ok(())
+// }
 
 struct WhitelistFile {}
 

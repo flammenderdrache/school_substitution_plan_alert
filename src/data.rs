@@ -16,7 +16,7 @@ pub struct Data {
 }
 
 impl Data {
-	pub fn default(data_directory: String) -> Result<Self, Box<dyn std::error::Error>> {
+	pub fn new(data_directory: String) -> Result<Self, Box<dyn std::error::Error>> {
 		std::fs::create_dir_all(data_directory.as_str())?;
 		std::fs::create_dir_all(format!("{}/{}", data_directory, PDF_JSON_DIR_NAME))?;
 
@@ -65,7 +65,7 @@ impl DataStore for Data {
 
 	fn update_class_whitelist(&self, classes: &HashSet<String>) -> Result<(), Box<dyn Error + '_>> {
 		let mut class_whitelist_file = self.whitelist_file.lock()?;
-		class_whitelist_file.seek(SeekFrom::Start(0))?; //Make sure the File Read/Write cursor is at the beginning of the file before reading
+		class_whitelist_file.seek(SeekFrom::Start(0))?; //Make sure the virtual File Read/Write cursor is at the beginning of the file before reading
 		let mut class_whitelist: HashSet<String> = serde_json::from_reader(&*class_whitelist_file).unwrap_or_default();
 
 		let mut changed = false;
@@ -120,7 +120,7 @@ mod tests {
 	fn test_store_and_retrieve_pdf_json() {
 		let data_directory = format!("/tmp/test-{}", get_random_name());
 		println!("tmp directory: {}", data_directory);
-		let data = Data::default(data_directory).unwrap();
+		let data = Data::new(data_directory).unwrap();
 
 
 		let json = "{ test: \"this is a test\" }".to_owned();
@@ -134,7 +134,7 @@ mod tests {
 	fn test_update_and_get_whitelist_json() {
 		let data_directory = format!("/tmp/test-{}", get_random_name());
 		println!("tmp directory: {}", data_directory);
-		let data = Data::default(data_directory).unwrap();
+		let data = Data::new(data_directory).unwrap();
 
 		let mut first_classes = HashSet::new();
 		first_classes.insert("TEST1".to_owned());
