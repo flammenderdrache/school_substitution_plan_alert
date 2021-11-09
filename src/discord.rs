@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -300,7 +300,8 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 
 	{
 		let class_whitelist_mutex = data.get::<WhitelistFile>().unwrap();
-		let whitelist_file = class_whitelist_mutex.lock().await;
+		let mut whitelist_file = class_whitelist_mutex.lock().await;
+		whitelist_file.seek(SeekFrom::Start(0))?;
 		let class_whitelist: HashSet<String> = serde_json::from_reader(&*whitelist_file)?;
 		if !class_whitelist.contains(&class) {
 			msg.reply(&ctx.http, "Sorry but the specified class is not on the whitelist. Please contact us to request it getting put on the whitelist").await?;
