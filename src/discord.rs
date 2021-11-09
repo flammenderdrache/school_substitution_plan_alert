@@ -369,7 +369,7 @@ async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 	}
 
 	msg.reply_ping(&ctx.http, format!("Removed you from class {}", &class)).await?;
-	info!("Registered {}#{} for class {}", msg.author.name, msg.author.discriminator, &class);
+	info!("Unregistered {}#{} from class {}", msg.author.name, msg.author.discriminator, &class);
 
 
 	Ok(())
