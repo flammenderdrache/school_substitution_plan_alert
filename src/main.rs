@@ -44,7 +44,7 @@ static SOURCE_URLS: [&str; 5] = [
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	SimpleLogger::new()
 		.with_level(LevelFilter::Error)
-		.with_module_level("school_substitution_plan_alert", LevelFilter::Trace)
+		.with_module_level("school_substitution_plan_alert", LevelFilter::Debug)
 		.init()
 		.unwrap();
 
@@ -129,34 +129,18 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	temp_pdf_file.write_all(&pdf)?;
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
 
-
-	// if new_schedule.pdf_create_date < chrono::Local::today().and_hms_milli(0, 0, 0, 0).timestamp_millis() {
-	// 	log::info!("Deleting old pdf for day {}", &day);
-	// 	datastore.delete_pdf_json(day)?;
-	// 	return Ok(());
-	// }
-
-	datastore.delete_pdf_json(day)?;
+	// Check the date in the pdf and if it is too old delete the file (if it exists) and return.
+	if new_schedule.pdf_create_date < chrono::Local::today().and_hms_milli(0, 0, 0, 0).timestamp_millis() {
+		log::info!("Deleting old pdf for day {}", &day);
+		datastore.delete_pdf_json(day)?;
+		return Ok(());
+	}
 
 	if let Err(why) = datastore.update_class_whitelist(&new_schedule.get_classes()) {
 		log::error!("{}", why);
 	}
 
 	let old_schedule_option: Option<SubstitutionSchedule> = {
-		// if let Ok(content) = datastore.get_pdf_json(day) {
-		// 	log::trace!("old_schedule_option datastore pdf was Ok");
-		// 	match serde_json::from_str(content.as_str()) {
-		// 		Ok(old_schedule) => Some(old_schedule),
-		// 		Err(why) => {
-		// 			log::error!("{}", why);
-		// 			None
-		// 		}
-		// 	}
-		// } else {
-		// 	log::trace!("old_schedule_option datastore pdf was Error");
-		// 	None
-		// }
-
 		match datastore.get_pdf_json(day) {
 			Ok(content) => {
 				log::trace!("old_schedule_option datastore pdf was Ok");

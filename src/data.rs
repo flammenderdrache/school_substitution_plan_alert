@@ -65,10 +65,11 @@ impl DataStore for Data {
 		let mut content = String::new();
 
 		json_file.read_to_string(&mut content)?;
-
 		Ok(content)
 	}
 
+	/// Checks the days pdf json and if it is too old, deletes it.
+	/// Returns Ok if the file does not exist.
 	fn delete_pdf_json(&self, weekday: Weekdays) -> Result<(), Box<dyn Error>> {
 		let path = format!("{}/{}/{}.json", self.data_directory, self.pdf_json_dir, weekday);
 		let path = Path::new(path.as_str());
@@ -79,6 +80,7 @@ impl DataStore for Data {
 		Ok(())
 	}
 
+	/// Stores the class whitelist or updates it with new data.
 	fn update_class_whitelist(&self, classes: &HashSet<String>) -> Result<(), Box<dyn Error + '_>> {
 		let mut class_whitelist_file = self.whitelist_file.lock()?;
 		class_whitelist_file.seek(SeekFrom::Start(0))?; //Make sure the virtual File Read/Write cursor is at the beginning of the file before reading
@@ -103,6 +105,7 @@ impl DataStore for Data {
 		Ok(())
 	}
 
+	/// Retrieves the class whitelist from the datastore.
 	fn get_class_whitelist(&self) -> Result<HashSet<String>, Box<dyn Error + '_>> {
 		let mut class_whitelist_file = self.whitelist_file.lock()?;
 		class_whitelist_file.seek(SeekFrom::Start(0))?;
