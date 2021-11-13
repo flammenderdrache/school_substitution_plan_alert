@@ -137,10 +137,7 @@ mod tests {
 
 	#[test]
 	fn test_store_and_retrieve_pdf_json() {
-		//TODO use get_tmp_data()
-		let data_directory = format!("/tmp/test-{}", get_random_name());
-		println!("tmp directory: {}", data_directory);
-		let data = Data::new(data_directory).unwrap();
+		let data = get_temp_data();
 		let day = Weekdays::Monday;
 
 		let json = "{ test: \"this is a test\" }".to_owned();
@@ -152,10 +149,7 @@ mod tests {
 
 	#[test]
 	fn test_update_and_get_whitelist_json() {
-		//TODO use get_tmp_data()
-		let data_directory = format!("/tmp/test-{}", get_random_name());
-		println!("tmp directory: {}", data_directory);
-		let data = Data::new(data_directory).unwrap();
+		let data = get_temp_data();
 
 		let mut first_classes = HashSet::new();
 		first_classes.insert("TEST1".to_owned());
