@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::Path;
 use std::sync::Mutex;
 
 use crate::substitution_pdf_getter::Weekdays;
@@ -16,7 +17,7 @@ pub struct Data {
 }
 
 impl Data {
-	pub fn new(data_directory: String) -> Result<Self, Box<dyn std::error::Error>> {
+	pub fn new(data_directory: String) -> Result<Self, Box<dyn Error>> {
 		std::fs::create_dir_all(data_directory.as_str())?;
 		std::fs::create_dir_all(format!("{}/{}", data_directory, PDF_JSON_DIR_NAME))?;
 
@@ -36,7 +37,7 @@ impl Data {
 
 impl DataStore for Data {
 	/// Stores the given PDF Json in a file
-	fn store_pdf_json(&self, weekday: Weekdays, pdf_json: &str) -> Result<(), Box<dyn std::error::Error>> {
+	fn store_pdf_json(&self, weekday: Weekdays, pdf_json: &str) -> Result<(), Box<dyn Error>> {
 		let mut substitution_file = OpenOptions::new()
 			.write(true)
 			.create(true)
@@ -50,17 +51,32 @@ impl DataStore for Data {
 	}
 
 	/// Retrieves the pdf Json from a file
-	fn get_pdf_json(&self, weekday: Weekdays) -> Result<String, Box<dyn std::error::Error>> {
-		let mut old_json_file = std::fs::OpenOptions::new()
+	fn get_pdf_json(&self, weekday: Weekdays) -> Result<String, Box<dyn Error>> {
+		let path = format!("{}/{}/{}.json", self.data_directory, PDF_JSON_DIR_NAME, weekday);
+		log::trace!("Get weekday pdf json path: `{}`", path);
+		let path = Path::new(path.as_str());
+		log::trace!("Path exists: {}", path.exists());
+
+		let mut json_file = std::fs::OpenOptions::new()
 			.read(true)
 			.write(false)
-			.open(format!("{}/{}/{}.json", self.data_directory, PDF_JSON_DIR_NAME, weekday))?;
+			.open(path)?;
 
 		let mut content = String::new();
 
-		old_json_file.read_to_string(&mut content)?;
+		json_file.read_to_string(&mut content)?;
 
 		Ok(content)
+	}
+
+	fn delete_pdf_json(&self, weekday: Weekdays) -> Result<(), Box<dyn Error>> {
+		let path = format!("{}/{}/{}.json", self.data_directory, self.pdf_json_dir, weekday);
+		let path = Path::new(path.as_str());
+		if !path.exists() {
+			return Ok(());
+		}
+		std::fs::remove_file(path)?;
+		Ok(())
 	}
 
 	fn update_class_whitelist(&self, classes: &HashSet<String>) -> Result<(), Box<dyn Error + '_>> {
@@ -97,16 +113,19 @@ impl DataStore for Data {
 
 
 pub trait DataStore {
-	/// Stores the pdf json
-	fn store_pdf_json(&self, weekday: Weekdays, pdf_json: &str) -> Result<(), Box<dyn std::error::Error>>;
+	/// Stores the pdf json.
+	fn store_pdf_json(&self, weekday: Weekdays, pdf_json: &str) -> Result<(), Box<dyn Error>>;
 
-	/// Retrieves a pdf json from the datastore
-	fn get_pdf_json(&self, weekday: Weekdays) -> Result<String, Box<dyn std::error::Error>>;
+	/// Retrieves a pdf json from the datastore.
+	fn get_pdf_json(&self, weekday: Weekdays) -> Result<String, Box<dyn Error>>;
 
-	/// Stores the class whitelist or updates it with new data
-	fn update_class_whitelist(&self, classes: &HashSet<String>) -> Result<(), Box<dyn std::error::Error + '_>>;
+	/// Checks the days pdf json and if it is too old, deletes it.
+	fn delete_pdf_json(&self, weekday: Weekdays) -> Result<(), Box<dyn Error>>;
 
-	/// Retrieves the class whitelist from the datastore
+	/// Stores the class whitelist or updates it with new data.
+	fn update_class_whitelist(&self, classes: &HashSet<String>) -> Result<(), Box<dyn Error + '_>>;
+
+	/// Retrieves the class whitelist from the datastore.
 	fn get_class_whitelist(&self) -> Result<HashSet<String>, Box<dyn Error + '_>>;
 }
 
@@ -118,20 +137,22 @@ mod tests {
 
 	#[test]
 	fn test_store_and_retrieve_pdf_json() {
+		//TODO use get_tmp_data()
 		let data_directory = format!("/tmp/test-{}", get_random_name());
 		println!("tmp directory: {}", data_directory);
 		let data = Data::new(data_directory).unwrap();
-
+		let day = Weekdays::Monday;
 
 		let json = "{ test: \"this is a test\" }".to_owned();
 
-		data.store_pdf_json(Weekdays::Monday, json.as_str()).unwrap();
+		data.store_pdf_json(day, json.as_str()).unwrap();
 
-		assert_eq!(json, data.get_pdf_json(Weekdays::Monday).unwrap())
+		assert_eq!(json, data.get_pdf_json(day).unwrap())
 	}
 
 	#[test]
 	fn test_update_and_get_whitelist_json() {
+		//TODO use get_tmp_data()
 		let data_directory = format!("/tmp/test-{}", get_random_name());
 		println!("tmp directory: {}", data_directory);
 		let data = Data::new(data_directory).unwrap();
@@ -156,5 +177,28 @@ mod tests {
 		let both = first_classes;
 
 		assert_eq!(both, data.get_class_whitelist().unwrap())
+	}
+
+	#[test]
+	fn delete_pdf_json() {
+		let data = get_temp_data();
+		let json = "{ test: \"this is a test\" }".to_owned();
+		let day = Weekdays::Friday;
+		data.store_pdf_json(day, json.as_str()).unwrap();
+
+		data.get_pdf_json(day).unwrap(); //sanity check
+
+		data.delete_pdf_json(day).unwrap();
+
+		assert!(data.get_pdf_json(day).is_err());
+	}
+
+	/// Gets a `Data` struct linked to a temporary directory in /tmp.
+	/// The data directory for the test is also identifiable by the name 'test-#random-name'.
+	/// The random name/directory gets printed for debugging.
+	fn get_temp_data() -> Data {
+		let data_directory = format!("/tmp/test-{}", get_random_name());
+		println!("tmp directory: {}", data_directory);
+		Data::new(data_directory).unwrap()
 	}
 }

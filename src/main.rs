@@ -2,7 +2,7 @@
 #![allow(clippy::let_underscore_drop)]
 
 use std::collections::HashSet;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
@@ -29,7 +29,6 @@ mod data;
 mod util;
 mod error;
 
-const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
 const USER_AND_CLASSES_SAVE_LOCATION: &str = "./class_registry.json";
 const CLASS_WHITELIST_LOCATION: &str = "./class_whitelist.json";
@@ -45,13 +44,12 @@ static SOURCE_URLS: [&str; 5] = [
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	SimpleLogger::new()
 		.with_level(LevelFilter::Error)
-		.with_module_level("school_substitution_plan_alert", LevelFilter::Debug)
+		.with_module_level("school_substitution_plan_alert", LevelFilter::Trace)
 		.init()
 		.unwrap();
 
 	// Make sure the paths we want to use exist
 	std::fs::create_dir_all(TEMP_ROOT_DIR)?;
-	std::fs::create_dir_all(PDF_JSON_ROOT_DIR)?;
 
 	let config_file = std::fs::File::open("./config.toml").expect("Error opening config file");
 	let config = Config::from_file(config_file);
@@ -132,44 +130,57 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
 
 
-	if new_schedule.pdf_create_date < chrono::Local::today().and_hms_milli(0, 0, 0, 0).timestamp_millis() {
-		log::info!("Deleting old pdf for day {}", &day);
-		std::fs::remove_file(format!("{}/{}.json", PDF_JSON_ROOT_DIR, day)).unwrap_or(());
-		return Ok(());
-	}
+	// if new_schedule.pdf_create_date < chrono::Local::today().and_hms_milli(0, 0, 0, 0).timestamp_millis() {
+	// 	log::info!("Deleting old pdf for day {}", &day);
+	// 	datastore.delete_pdf_json(day)?;
+	// 	return Ok(());
+	// }
 
-
-	let data = discord.data.read().await;
+	datastore.delete_pdf_json(day)?;
 
 	if let Err(why) = datastore.update_class_whitelist(&new_schedule.get_classes()) {
 		log::error!("{}", why);
 	}
 
-	//Open and parse the json file first, instead of at each iteration in the loop
 	let old_schedule_option: Option<SubstitutionSchedule> = {
-		let old_json_file = std::fs::OpenOptions::new()
-			.read(true)
-			.write(false)
-			.open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day));
+		// if let Ok(content) = datastore.get_pdf_json(day) {
+		// 	log::trace!("old_schedule_option datastore pdf was Ok");
+		// 	match serde_json::from_str(content.as_str()) {
+		// 		Ok(old_schedule) => Some(old_schedule),
+		// 		Err(why) => {
+		// 			log::error!("{}", why);
+		// 			None
+		// 		}
+		// 	}
+		// } else {
+		// 	log::trace!("old_schedule_option datastore pdf was Error");
+		// 	None
+		// }
 
-		if let Ok(old_schedule_json) = old_json_file {
-			match serde_json::from_reader(old_schedule_json) {
-				Ok(old_schedule) => { Some(old_schedule) }
-				Err(why) => {
-					error!("{}", why);
-					panic!("Error parsing the old json");
+		match datastore.get_pdf_json(day) {
+			Ok(content) => {
+				log::trace!("old_schedule_option datastore pdf was Ok");
+				match serde_json::from_str(content.as_str()) {
+					Ok(old_schedule) => Some(old_schedule),
+					Err(why) => {
+						log::error!("{}", why);
+						None
+					}
 				}
 			}
-		} else {
-			None
+			Err(err) => {
+				log::error!("{}", err);
+				None
+			}
 		}
 	};
 
-	let mut to_notify: HashSet<u64> = HashSet::new();
+	let data = discord.data.read().await;
 
 	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 	let classes_and_users_inner = classes_and_users.get_inner_classes_and_users();
 
+	let mut to_notify: HashSet<u64> = HashSet::new();
 
 	let mut add_to_notify = |class| {
 		for user_id in classes_and_users_inner.get(class).unwrap() { // The unwrap is safe since we know the class exists
@@ -193,44 +204,15 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 
 	discord.notify_users(day, &new_schedule, to_notify).await?;
 
-	let new_substitution_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
-	let mut substitution_file = OpenOptions::new()
-		.write(true)
-		.create(true)
-		.truncate(true)
-		.open(format!("{}/{}.json", PDF_JSON_ROOT_DIR, day))
-		.expect("Couldn't open file to write new json");
+	let new_schedule_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
 
-	substitution_file.write_all(new_substitution_json.as_bytes())?;
+	datastore.store_pdf_json(day, new_schedule_json.as_str())?;
 
 	std::fs::remove_file(temp_file_path)?;
 	std::fs::remove_dir(temp_dir_path)?;
 
 	Ok(())
 }
-
-// fn update_whitelisted_classes(classes: &HashSet<String>, class_whitelist_file: &mut File) -> Result<(), Box<dyn std::error::Error>> {
-// 	class_whitelist_file.seek(SeekFrom::Start(0))?; //Make sure the File Read/Write cursor is at the beginning of the file before reading
-// 	let mut class_whitelist: HashSet<String> = serde_json::from_reader(&*class_whitelist_file).unwrap_or_default();
-//
-// 	let mut changed = false;
-// 	for class in classes {
-// 		if !class_whitelist.contains(class) {
-// 			class_whitelist.insert(class.clone());
-// 			changed = true;
-// 		}
-// 	}
-//
-//
-// 	if changed {
-// 		let whitelist_json = serde_json::to_string_pretty(&class_whitelist).unwrap();
-// 		class_whitelist_file.set_len(0)?;
-// 		class_whitelist_file.seek(SeekFrom::Start(0))?;
-// 		class_whitelist_file.write_all(whitelist_json.as_bytes())?;
-// 	}
-//
-// 	Ok(())
-// }
 
 struct WhitelistFile {}
 
