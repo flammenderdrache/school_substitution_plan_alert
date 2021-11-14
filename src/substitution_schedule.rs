@@ -9,8 +9,8 @@ use std::time::SystemTime;
 use chrono::{Local, NaiveDate, Offset, Utc};
 use lopdf::Document;
 use serde::{Deserialize, Serialize};
-use crate::error::StringError;
 
+use crate::error::StringError;
 use crate::tabula_json_parser::parse;
 
 /// One column with Substitutions from the PDF

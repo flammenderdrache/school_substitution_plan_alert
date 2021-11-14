@@ -41,6 +41,7 @@ pub fn sanitize_and_check_register_class_input(input: &str) -> Result<String, Bo
 #[cfg(test)]
 mod tests {
 	use crate::discord_notifier;
+
 	use super::*;
 
 	#[test]

@@ -14,9 +14,9 @@ use serenity::http::Http;
 use serenity::model::prelude::UserId;
 
 use crate::classes_and_users::ClassesAndUsers;
-use crate::config::Config;
 use crate::commands::{after, before, dispatch_error, Handler, normal_message, unknown_command};
 use crate::commands::*;
+use crate::config::Config;
 use crate::SOURCE_URLS;
 use crate::substitution_pdf_getter::Weekdays;
 use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
