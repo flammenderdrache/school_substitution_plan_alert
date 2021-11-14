@@ -516,18 +516,18 @@ mod tests {
 		let mut table_map = HashMap::new();
 
 		let mut first = Substitutions::new();
-		first.block_1.insert("ONE".to_owned());
-		first.block_3.insert("THREE".to_owned());
-		first.block_5.insert("FIVE".to_owned());
+		let _ = first.block_1.insert("ONE".to_owned());
+		let _ = first.block_3.insert("THREE".to_owned());
+		let _ = first.block_5.insert("FIVE".to_owned());
 		table_map.insert("FIRST".to_owned(), &first);
 
 		let mut second = Substitutions::new();
-		second.block_0.insert("ZERO".to_owned());
-		second.block_1.insert("ONE".to_owned());
-		second.block_2.insert("TWO".to_owned());
-		second.block_3.insert("THREE".to_owned());
-		second.block_4.insert("FOUR".to_owned());
-		second.block_5.insert("FIVE".to_owned());
+		let _ = second.block_0.insert("ZERO".to_owned());
+		let _ = second.block_1.insert("ONE".to_owned());
+		let _ = second.block_2.insert("TWO".to_owned());
+		let _ = second.block_3.insert("THREE".to_owned());
+		let _ = second.block_4.insert("FOUR".to_owned());
+		let _ = second.block_5.insert("FIVE".to_owned());
 		table_map.insert("SECOND".to_owned(), &second);
 
 		let out = DiscordNotifier::table_from_substitutions(&table_map);
@@ -586,12 +586,12 @@ mod tests {
 		let mut table_map = HashMap::new();
 
 		let mut first = Substitutions::new();
-		first.block_1.insert("ONE".to_owned());
-		first.block_4.insert("FOUR".to_owned());
+		let _ = first.block_1.insert("ONE".to_owned());
+		let _ = first.block_4.insert("FOUR".to_owned());
 		table_map.insert("FIRST".to_owned(), &first);
 
 		let mut second = Substitutions::new();
-		second.block_3.insert("THREE".to_owned());
+		let _ = second.block_3.insert("THREE".to_owned());
 		table_map.insert("SECOND".to_owned(), &second);
 
 		let out = DiscordNotifier::table_from_substitutions(&table_map);
