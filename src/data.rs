@@ -166,7 +166,7 @@ pub trait DataStore {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 	use crate::util::get_random_name;
 
 	use super::*;
@@ -226,7 +226,7 @@ mod tests {
 	/// Gets a `Data` struct linked to a temporary directory in /tmp.
 	/// The data directory for the test is also identifiable by the name 'test-#random-name'.
 	/// The random name/directory gets printed for debugging.
-	fn get_temp_data() -> Data {
+	pub fn get_temp_data() -> Data {
 		let data_directory = format!("/tmp/test-{}", get_random_name());
 		println!("tmp directory: {}", data_directory);
 		Data::new(data_directory).unwrap()

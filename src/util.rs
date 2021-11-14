@@ -40,8 +40,6 @@ pub fn sanitize_and_check_register_class_input(input: &str) -> Result<String, Bo
 
 #[cfg(test)]
 mod tests {
-	use crate::discord_notifier;
-
 	use super::*;
 
 	#[test]
@@ -84,6 +82,6 @@ mod tests {
 	fn test_sanitize_check_between_large_char_and_small_char_ascii_value() {
 		let test_class = "BGY/@;19[1";
 		let output = sanitize_and_check_register_class_input(test_class).unwrap();
-		assert_eq!(output, "BGYM191")
+		assert_eq!(output, "BGYM191");
 	}
 }

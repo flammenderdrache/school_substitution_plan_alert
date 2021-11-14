@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::sync::Arc;
+
 use log::debug;
+
 use crate::{Data, DataStore, TypeMapKey};
 
 //Maybe accept something that implements datastore for reading and writing
@@ -77,5 +79,34 @@ impl ClassesAndUsers {
 
 	pub fn get_inner_classes_and_users(&self) -> &HashMap<String, HashSet<u64>> {
 		&self.classes_and_users
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::data::tests::get_temp_data;
+
+	use super::*;
+
+	#[test]
+	fn test_insert_get_and_remove_user() {
+		let datastore = Arc::new(get_temp_data());
+		let mut classes_and_users = ClassesAndUsers::new(datastore.clone());
+
+		let class = "TEST";
+		let class_2 = "TEST2";
+
+		classes_and_users.insert_user(class.to_owned(), 1).unwrap();
+		classes_and_users.insert_user(class.to_owned(), 2).unwrap();
+		classes_and_users.insert_user(class_2.to_owned(), 1).unwrap();
+		classes_and_users.insert_user(class_2.to_owned(), 3).unwrap();
+
+		assert_eq!(classes_and_users.get_user_classes(1), vec![class.to_owned(), class_2.to_owned()]);
+		assert_eq!(classes_and_users.get_user_classes(2), vec![class.to_owned()]);
+		assert_eq!(classes_and_users.get_user_classes(3), vec![class_2.to_owned()]);
+
+		classes_and_users.remove_user_from_class(class, 1).unwrap();
+
+		assert_eq!(classes_and_users.get_user_classes(1), vec![class_2.to_owned()]);
 	}
 }
