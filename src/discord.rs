@@ -172,7 +172,6 @@ impl DiscordNotifier {
 		{
 			let mut data = client.data.write().await;
 			data.insert::<ShardManagerContainer>(Arc::clone(&client.shard_manager));
-			data.insert::<ClassesAndUsers>(ClassesAndUsers::new_from_file(Path::new(USER_AND_CLASSES_SAVE_LOCATION)));
 			data.insert::<Config>(config);
 		}
 

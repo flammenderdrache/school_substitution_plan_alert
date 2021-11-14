@@ -3,9 +3,10 @@ use std::error::Error;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::substitution_pdf_getter::Weekdays;
+use crate::TypeMapKey;
 
 const PDF_JSON_DIR_NAME: &str = "pdf_jsons";
 const WHITELIST_JSON_FILE_NAME: &str = "class_whitelist.json";
@@ -33,6 +34,10 @@ impl Data {
 			whitelist_file: Mutex::new(whitelist_file),
 		})
 	}
+}
+
+impl TypeMapKey for Data {
+	type Value = Arc<Self>;
 }
 
 impl DataStore for Data {

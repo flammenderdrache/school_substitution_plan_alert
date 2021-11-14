@@ -62,8 +62,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.open(CLASS_WHITELIST_LOCATION)
 		.expect("Couldn't open whitelist config file");
 
-	// update_whitelisted_classes(&config.general.class_whitelist, &mut whitelist_config_file)?;
-
 	if let Err(why) = datastore.update_class_whitelist(&config.general.class_whitelist) {
 		log::error!("{}", why)
 	}
@@ -75,6 +73,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 		let mut data = discord_notifier.data.write().await;
 		data.insert::<WhitelistFile>(file_mutex);
+
+		let datastore_arc = datastore.clone();
+		data.insert::<Data>(datastore_arc);
+
+		let classes_and_users =
+		data.insert::<ClassesAndUsers>(ClassesAndUsers::new_from_file(Path::new(USER_AND_CLASSES_SAVE_LOCATION)));
+
 	}
 
 	let pdf_getter = Arc::new(SubstitutionPDFGetter::default());
