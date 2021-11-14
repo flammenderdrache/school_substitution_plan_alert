@@ -12,10 +12,8 @@ const PDF_JSON_DIR_NAME: &str = "pdf_jsons";
 const WHITELIST_JSON_FILE_NAME: &str = "class_whitelist.json";
 const CLASSES_AND_USERS_FILE_NAME: &str = "class_registry.json";
 
-//TODO replace pdf_json_dir field with the const
 pub struct Data {
 	data_directory: String,
-	pdf_json_dir: String,
 	whitelist_file: Mutex<File>,
 }
 
@@ -32,7 +30,6 @@ impl Data {
 
 		Ok(Self {
 			data_directory,
-			pdf_json_dir: "pdf_jsons".to_owned(),
 			whitelist_file: Mutex::new(whitelist_file),
 		})
 	}
@@ -78,7 +75,7 @@ impl DataStore for Data {
 	/// Checks the days pdf json and if it is too old, deletes it.
 	/// Returns Ok if the file does not exist.
 	fn delete_pdf_json(&self, weekday: Weekdays) -> Result<(), Box<dyn Error>> {
-		let path = format!("{}/{}/{}.json", self.data_directory, self.pdf_json_dir, weekday);
+		let path = format!("{}/{}/{}.json", self.data_directory, PDF_JSON_DIR_NAME, weekday);
 		let path = Path::new(path.as_str());
 		if !path.exists() {
 			return Ok(());
