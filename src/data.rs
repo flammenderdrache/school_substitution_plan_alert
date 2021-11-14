@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -10,7 +10,9 @@ use crate::TypeMapKey;
 
 const PDF_JSON_DIR_NAME: &str = "pdf_jsons";
 const WHITELIST_JSON_FILE_NAME: &str = "class_whitelist.json";
+const CLASSES_AND_USERS_FILE_NAME: &str = "class_registry.json";
 
+//TODO replace pdf_json_dir field with the const
 pub struct Data {
 	data_directory: String,
 	pdf_json_dir: String,
@@ -117,6 +119,29 @@ impl DataStore for Data {
 		let class_whitelist: HashSet<String> = serde_json::from_reader(&*class_whitelist_file)?;
 		Ok(class_whitelist)
 	}
+
+	fn get_classes_and_users(&self) -> Result<HashMap<String, HashSet<u64>>, Box<dyn Error>> {
+		let classes_and_users_path = format!("{}/{}", self.data_directory, CLASSES_AND_USERS_FILE_NAME);
+		let classes_and_users_file = std::fs::OpenOptions::new()
+			.read(true)
+			.write(true)
+			.create(true)
+			.open(classes_and_users_path)?;
+		let classes_and_users: HashMap<String, HashSet<u64>> = serde_json::from_reader(classes_and_users_file)?;
+		Ok(classes_and_users)
+	}
+
+	fn store_classes_and_users(&self, classes_and_users: &HashMap<String, HashSet<u64>>) -> Result<(), Box<dyn Error>> {
+		let json = serde_json::to_string_pretty(classes_and_users)?;
+		let path = format!("{}/{}", self.data_directory, CLASSES_AND_USERS_FILE_NAME);
+		let mut classes_and_users_save_file = std::fs::OpenOptions::new()
+			.write(true)
+			.create(true)
+			.truncate(true)
+			.open(path)?;
+		classes_and_users_save_file.write_all(json.as_bytes())?;
+		Ok(())
+	}
 }
 
 
@@ -135,6 +160,12 @@ pub trait DataStore {
 
 	/// Retrieves the class whitelist from the datastore.
 	fn get_class_whitelist(&self) -> Result<HashSet<String>, Box<dyn Error + '_>>;
+
+	/// Retrieves the classes and its subscribers.
+	fn get_classes_and_users(&self) -> Result<HashMap<String, HashSet<u64>>, Box<dyn Error>>;
+
+	/// Stores the classes and its subscribers.
+	fn store_classes_and_users(&self, classes_and_users: &HashMap<String, HashSet<u64>>) -> Result<(), Box<dyn Error>>;
 }
 
 #[cfg(test)]

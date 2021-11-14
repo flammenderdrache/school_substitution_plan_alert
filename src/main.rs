@@ -2,7 +2,6 @@
 #![allow(clippy::let_underscore_drop)]
 
 use std::collections::HashSet;
-use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
@@ -12,7 +11,6 @@ use chrono::{Datelike, DateTime, Local};
 use log::{debug, error, info, LevelFilter, trace};
 use serenity::prelude::TypeMapKey;
 use simple_logger::SimpleLogger;
-use tokio::sync::Mutex;
 
 use crate::config::Config;
 use crate::data::{Data, DataStore};
@@ -30,8 +28,6 @@ mod util;
 mod error;
 
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
-const USER_AND_CLASSES_SAVE_LOCATION: &str = "./class_registry.json";
-const CLASS_WHITELIST_LOCATION: &str = "./class_whitelist.json";
 static SOURCE_URLS: [&str; 5] = [
 	"https://buessing.schule/plaene/VertretungsplanA4_Montag.pdf",
 	"https://buessing.schule/plaene/VertretungsplanA4_Dienstag.pdf",
@@ -55,13 +51,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let config = Config::from_file(config_file);
 	let datastore = Arc::new(Data::new("./data".to_owned())?);
 
-	let whitelist_config_file = std::fs::OpenOptions::new()
-		.read(true)
-		.write(true)
-		.create(true)
-		.open(CLASS_WHITELIST_LOCATION)
-		.expect("Couldn't open whitelist config file");
-
 	if let Err(why) = datastore.update_class_whitelist(&config.general.class_whitelist) {
 		log::error!("{}", why)
 	}
@@ -69,17 +58,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let discord_notifier = Arc::from(discord::DiscordNotifier::new(config).await);
 
 	{
-		let file_mutex = Arc::from(Mutex::new(whitelist_config_file));
-
 		let mut data = discord_notifier.data.write().await;
-		data.insert::<WhitelistFile>(file_mutex);
 
 		let datastore_arc = datastore.clone();
 		data.insert::<Data>(datastore_arc);
 
-		let classes_and_users =
-		data.insert::<ClassesAndUsers>(ClassesAndUsers::new_from_file(Path::new(USER_AND_CLASSES_SAVE_LOCATION)));
-
+		let classes_and_users = ClassesAndUsers::new(datastore.clone());
+		data.insert::<ClassesAndUsers>(classes_and_users);
 	}
 
 	let pdf_getter = Arc::new(SubstitutionPDFGetter::default());
@@ -157,8 +142,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 					}
 				}
 			}
-			Err(err) => {
-				log::error!("{}", err);
+			Err(_) => {
 				None
 			}
 		}
@@ -201,10 +185,4 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	std::fs::remove_dir(temp_dir_path)?;
 
 	Ok(())
-}
-
-struct WhitelistFile {}
-
-impl TypeMapKey for WhitelistFile {
-	type Value = Arc<Mutex<File>>;
 }

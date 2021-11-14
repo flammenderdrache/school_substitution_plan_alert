@@ -1,12 +1,10 @@
 use std::collections::{HashMap, HashSet};
-use std::io::{Seek, SeekFrom, Write};
-use std::path::Path;
+use std::error::Error;
 use std::sync::Arc;
 
 use log::{debug, error, info};
 use prettytable::{Cell, Row, Table};
 use prettytable::format::consts::FORMAT_BOX_CHARS;
-use serde::{Deserialize, Serialize};
 use serenity::{
 	framework::standard::{
 		CommandResult,
@@ -23,65 +21,44 @@ use serenity::framework::standard::{Args, CommandGroup, help_commands, HelpOptio
 use serenity::http::Http;
 use serenity::model::prelude::{Activity, OnlineStatus, Ready, UserId};
 
+use crate::{Data, DataStore};
 use crate::config::Config;
+use crate::SOURCE_URLS;
 use crate::substitution_pdf_getter::Weekdays;
 use crate::substitution_schedule::{Substitutions, SubstitutionSchedule};
-use crate::{USER_AND_CLASSES_SAVE_LOCATION, WhitelistFile};
-use crate::SOURCE_URLS;
 
-//TODO Move file read/write logic to Data struct
 //Maybe accept something that implements datastore for reading and writing
-#[derive(Serialize, Deserialize)]
 pub struct ClassesAndUsers {
+	datastore: Arc<Data>,
 	classes_and_users: HashMap<String, HashSet<u64>>,
 }
 
 impl ClassesAndUsers {
-	pub fn default() -> Self {
+	pub fn new(datastore: Arc<Data>) -> Self {
+		let classes_and_users = datastore.get_classes_and_users().unwrap_or_default();
+
 		Self {
-			classes_and_users: HashMap::new()
+			datastore,
+			classes_and_users,
 		}
 	}
 
-	pub fn new_from_file(path: &Path) -> Self {
-		if !path.exists() {
-			return Self::default();
-		}
-
-		let file = std::fs::OpenOptions::new()
-			.read(true)
-			.write(false)
-			.open(path)
-			.expect("Couldn't open user file");
-
-		serde_json::from_reader(file).expect("Malformed User Save file")
-	}
-
-	//TODO make function Async and use Tokio async file operations
-	pub fn write_to_file(&self, path: &Path) {
-		let mut file = std::fs::OpenOptions::new()
-			.write(true)
-			.create(true)
-			.truncate(true)
-			.open(path)
-			.expect("Couldn't open user save file");
-		let json = serde_json::to_string_pretty(self).unwrap();
-		if let Err(why) = file.write_all(json.as_bytes()) {
-			error!("{}", why);
-		}
+	pub fn save(&self) -> Result<(), Box<dyn Error>> {
+		self.datastore.store_classes_and_users(&self.classes_and_users)
 	}
 
 	#[allow(clippy::or_fun_call)]
-	pub fn insert_user(&mut self, class: String, user_id: u64, user_and_classes_save_location: &Path) {
+	pub fn insert_user(&mut self, class: String, user_id: u64) -> Result<(), Box<dyn Error>> {
 		self.
 			classes_and_users
 			.entry(class)
 			.or_insert(HashSet::new())
 			.insert(user_id);
-		self.write_to_file(user_and_classes_save_location);
+		self.save()
 	}
 
-	pub fn remove_user_from_class(&mut self, class: &str, user_id: u64, user_and_classes_save_location: &Path) -> bool {
+	/// Returns a boolean of whether the operation was successful.
+	pub fn remove_user_from_class(&mut self, class: &str, user_id: u64) -> Result<bool, Box<dyn Error>> {
 		debug!("Class for user {} is {}", class, &user_id);
 		let mut successful = false;
 		if let Some(class_users) = self.classes_and_users.get_mut(class) {
@@ -90,11 +67,12 @@ impl ClassesAndUsers {
 				self.classes_and_users.remove(class);
 			}
 		}
-		self.write_to_file(user_and_classes_save_location);
 
-		successful
+		self.save()?;
+		Ok(successful)
 	}
 
+	/// Gets the classes a user subscribed to.
 	pub fn get_user_classes(&self, user_id: u64) -> Vec<String> {
 		let mut classes = Vec::new();
 		let classes_and_users = &self.classes_and_users;
@@ -296,21 +274,16 @@ async fn register(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult
 	}
 
 	let mut data = ctx.data.write().await;
+	let datastore = data.get::<Data>().unwrap();
 
-	{
-		//TODO replace with getting class whitelist from datastore
-		let class_whitelist_mutex = data.get::<WhitelistFile>().unwrap();
-		let mut whitelist_file = class_whitelist_mutex.lock().await;
-		whitelist_file.seek(SeekFrom::Start(0))?;
-		let class_whitelist: HashSet<String> = serde_json::from_reader(&*whitelist_file)?;
-		if !class_whitelist.contains(&class) {
-			msg.reply(&ctx.http, "Sorry but the specified class is not on the whitelist. Please contact us to request it getting put on the whitelist").await?;
-			return Ok(());
-		}
+	let class_whitelist = datastore.get_class_whitelist().expect("Error getting class whitelist");
+	if !class_whitelist.contains(&class) {
+		msg.reply(&ctx.http, "Sorry but the specified class is not on the whitelist. Please contact us to request it getting put on the whitelist").await?;
+		return Ok(());
 	}
 
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-	classes_and_users.insert_user(class.clone(), user, Path::new(USER_AND_CLASSES_SAVE_LOCATION));
+	let _ = classes_and_users.insert_user(class.clone(), user);
 
 	msg.reply_ping(&ctx.http, format!(
 		"Registered you for class {}.\n \
@@ -364,7 +337,7 @@ async fn unregister(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 
 	let mut data = ctx.data.write().await;
 	let classes_and_users = data.get_mut::<ClassesAndUsers>().unwrap();
-	let success = classes_and_users.remove_user_from_class(class.as_str(), user, Path::new(USER_AND_CLASSES_SAVE_LOCATION));
+	let success = classes_and_users.remove_user_from_class(class.as_str(), user).unwrap_or(false);
 	if !success {
 		msg.reply_ping(&ctx.http, "An error occurred adding you to the class notifications").await?;
 	}
