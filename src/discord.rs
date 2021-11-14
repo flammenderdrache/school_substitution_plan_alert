@@ -368,8 +368,8 @@ pub async fn my_help(
 	Ok(())
 }
 
-///Removes the dots to make e.g. "BGYM19.1" valid (turning it into "BGYM191")
-///Also turns the input uppercase; "BGym19.1" -> "BGYM191" as that is how they are referred to in the PDF
+/// Removes the dots to make e.g. "BGYM19.1" valid (turning it into "BGYM191")
+/// Also turns the input uppercase; "BGym19.1" -> "BGYM191" as that is how they are referred to in the PDF
 fn sanitize_and_check_register_class_input(input: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
 	let input = input.replace('.', "");
 
