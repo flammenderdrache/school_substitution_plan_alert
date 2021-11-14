@@ -15,19 +15,20 @@ use simple_logger::SimpleLogger;
 use crate::classes_and_users::ClassesAndUsers;
 use crate::config::Config;
 use crate::data::{Data, DataStore};
-use crate::discord::DiscordNotifier;
+use crate::discord_notifier::DiscordNotifier;
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
 
 mod substitution_schedule;
 mod tabula_json_parser;
 mod substitution_pdf_getter;
-mod discord;
+mod commands;
 mod config;
 mod data;
 mod util;
 mod error;
 mod classes_and_users;
+mod discord_notifier;
 
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
 static SOURCE_URLS: [&str; 5] = [
@@ -57,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 		log::error!("{}", why)
 	}
 
-	let discord_notifier = Arc::from(discord::DiscordNotifier::new(config).await);
+	let discord_notifier = Arc::from(DiscordNotifier::new(config).await);
 
 	{
 		let mut data = discord_notifier.data.write().await;
