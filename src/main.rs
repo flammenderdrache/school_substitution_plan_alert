@@ -31,7 +31,7 @@ mod classes_and_users;
 mod discord_notifier;
 
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
-static SOURCE_URLS: [&str; 5] = [
+const SOURCE_URLS: [&str; 5] = [
 	"https://buessing.schule/plaene/VertretungsplanA4_Montag.pdf",
 	"https://buessing.schule/plaene/VertretungsplanA4_Dienstag.pdf",
 	"https://buessing.schule/plaene/VertretungsplanA4_Mittwoch.pdf",
