@@ -1,5 +1,6 @@
 #![allow(clippy::non_ascii_literal)]
 #![allow(clippy::let_underscore_drop)]
+#![allow(clippy::wildcard_imports)]
 
 use std::collections::HashSet;
 use std::io::Write;
@@ -55,7 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let datastore = Arc::new(Data::new("./data".to_owned())?);
 
 	if let Err(why) = datastore.update_class_whitelist(&config.general.class_whitelist) {
-		log::error!("{}", why)
+		log::error!("{}", why);
 	}
 
 	let discord_notifier = Arc::from(DiscordNotifier::new(config).await);

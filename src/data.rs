@@ -141,7 +141,7 @@ impl DataStore for Data {
 	}
 }
 
-
+#[allow(clippy::module_name_repetitions)]
 pub trait DataStore {
 	/// Stores the pdf json.
 	fn store_pdf_json(&self, weekday: Weekdays, pdf_json: &str) -> Result<(), Box<dyn Error>>;
