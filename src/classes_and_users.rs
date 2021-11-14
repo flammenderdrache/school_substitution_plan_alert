@@ -10,6 +10,10 @@ pub struct ClassesAndUsers {
 	classes_and_users: HashMap<String, HashSet<u64>>,
 }
 
+impl TypeMapKey for ClassesAndUsers {
+	type Value = ClassesAndUsers;
+}
+
 impl ClassesAndUsers {
 	pub fn new(datastore: Arc<Data>) -> Self {
 		let classes_and_users = datastore.get_classes_and_users().unwrap_or_default();
@@ -74,8 +78,4 @@ impl ClassesAndUsers {
 	pub fn get_inner_classes_and_users(&self) -> &HashMap<String, HashSet<u64>> {
 		&self.classes_and_users
 	}
-}
-
-impl TypeMapKey for ClassesAndUsers {
-	type Value = ClassesAndUsers;
 }
