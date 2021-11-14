@@ -12,9 +12,10 @@ use log::{debug, error, info, LevelFilter, trace};
 use serenity::prelude::TypeMapKey;
 use simple_logger::SimpleLogger;
 
+use crate::classes_and_users::ClassesAndUsers;
 use crate::config::Config;
 use crate::data::{Data, DataStore};
-use crate::discord::{ClassesAndUsers, DiscordNotifier};
+use crate::discord::DiscordNotifier;
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
 
@@ -26,6 +27,7 @@ mod config;
 mod data;
 mod util;
 mod error;
+mod classes_and_users;
 
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
 static SOURCE_URLS: [&str; 5] = [
