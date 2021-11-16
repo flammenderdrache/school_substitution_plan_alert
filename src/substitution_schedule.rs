@@ -9,10 +9,11 @@ use std::time::SystemTime;
 use chrono::{Local, NaiveDate, Offset, Utc};
 use lopdf::Document;
 use serde::{Deserialize, Serialize};
-use crate::error::StringError;
 
+use crate::error::StringError;
 use crate::tabula_json_parser::parse;
 
+/// One column with Substitutions from the PDF
 #[derive(Serialize, Deserialize, PartialOrd, PartialEq, Debug)]
 pub struct Substitutions {
 	#[serde(rename(serialize = "0"))]
@@ -72,6 +73,7 @@ impl Display for Substitutions {
 	}
 }
 
+/// Contains the extracted PDF data of the schedule PDF
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubstitutionSchedule {
 	/// The creation date inside the PDF
@@ -145,7 +147,7 @@ impl SubstitutionSchedule {
 			.expect("Time got fucked");
 
 		#[allow(clippy::cast_possible_truncation)]
-		let time_millis = since_the_epoch.as_millis() as u64;
+			let time_millis = since_the_epoch.as_millis() as u64;
 
 		Self {
 			pdf_create_date,
@@ -175,7 +177,7 @@ impl SubstitutionSchedule {
 			.collect();
 
 		#[allow(clippy::cast_possible_wrap)]
-		let date = chrono::Date::<Local>::from_utc(
+			let date = chrono::Date::<Local>::from_utc(
 			NaiveDate::from_ymd(date_str[2] as i32, date_str[1], date_str[0]),
 			Utc.fix(),
 		).and_hms_milli(0, 0, 0, 0).timestamp_millis();
