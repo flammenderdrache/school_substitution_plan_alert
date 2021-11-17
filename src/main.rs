@@ -1,8 +1,8 @@
 #![allow(clippy::non_ascii_literal)]
 #![allow(clippy::let_underscore_drop)]
+#![allow(clippy::wildcard_imports)]
 
 use std::collections::HashSet;
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
@@ -10,23 +10,35 @@ use std::time::Duration;
 
 use chrono::{Datelike, DateTime, Local};
 use log::{debug, error, info, LevelFilter, trace};
+use serenity::prelude::TypeMapKey;
 use simple_logger::SimpleLogger;
-use uuid::Uuid;
 
+use crate::classes_and_users::ClassesAndUsers;
 use crate::config::Config;
-use crate::discord::{ClassesAndUsers, DiscordNotifier};
+use crate::data::{Data, DataStore};
+use crate::discord_notifier::DiscordNotifier;
 use crate::substitution_pdf_getter::{SubstitutionPDFGetter, Weekdays};
 use crate::substitution_schedule::SubstitutionSchedule;
 
 mod substitution_schedule;
 mod tabula_json_parser;
 mod substitution_pdf_getter;
-mod discord;
+mod commands;
 mod config;
+mod data;
+mod util;
+mod error;
+mod classes_and_users;
+mod discord_notifier;
 
-const PDF_JSON_ROOT_DIR: &str = "./pdf-jsons";
 const TEMP_ROOT_DIR: &str = "/tmp/school-substitution-scanner-temp-dir";
-const USER_AND_CLASSES_SAVE_LOCATION: &str = "./class_registry.json";
+const SOURCE_URLS: [&str; 5] = [
+	"https://buessing.schule/plaene/VertretungsplanA4_Montag.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Dienstag.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Mittwoch.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Donnerstag.pdf",
+	"https://buessing.schule/plaene/VertretungsplanA4_Freitag.pdf",
+];
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,12 +50,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	// Make sure the paths we want to use exist
 	std::fs::create_dir_all(TEMP_ROOT_DIR)?;
-	std::fs::create_dir_all(PDF_JSON_ROOT_DIR)?;
 
 	let config_file = std::fs::File::open("./config.toml").expect("Error opening config file");
 	let config = Config::from_file(config_file);
+	let datastore = Arc::new(Data::new("./data".to_owned())?);
 
-	let discord_notifier = Arc::from(discord::DiscordNotifier::new(config).await);
+	if let Err(why) = datastore.update_class_whitelist(&config.general.class_whitelist) {
+		log::error!("{}", why);
+	}
+
+	let discord_notifier = Arc::from(DiscordNotifier::new(config).await);
+
+	{
+		let mut data = discord_notifier.data.write().await;
+
+		let datastore_arc = datastore.clone();
+		data.insert::<Data>(datastore_arc);
+
+		let classes_and_users = ClassesAndUsers::new(datastore.clone());
+		data.insert::<ClassesAndUsers>(classes_and_users);
+	}
 
 	let pdf_getter = Arc::new(SubstitutionPDFGetter::default());
 
@@ -61,16 +87,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 		let pdf_getter_arc = pdf_getter.clone();
 		let discord_notifier_arc = discord_notifier.clone();
+		let datastore_arc = datastore.clone();
 		tokio::spawn(async move {
-			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter_arc, discord_notifier_arc).await {
+			if let Err(why) = check_weekday_pdf(next_valid_school_weekday, pdf_getter_arc, discord_notifier_arc, datastore_arc).await {
 				error!("{}", why);
 			}
 		});
 
 		let pdf_getter_arc = pdf_getter.clone();
 		let discord_notifier_arc = discord_notifier.clone();
+		let datastore_arc = datastore.clone();
 		tokio::spawn(async move {
-			if let Err(why) = check_weekday_pdf(day_after, pdf_getter_arc, discord_notifier_arc).await {
+			if let Err(why) = check_weekday_pdf(day_after, pdf_getter_arc, discord_notifier_arc, datastore_arc).await {
 				error!("{}", why);
 			}
 		});
@@ -83,10 +111,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[allow(clippy::or_fun_call)]
-async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>) -> Result<(), Box<dyn std::error::Error>> {
+async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<'_>>, discord: Arc<DiscordNotifier>, datastore: Arc<Data>) -> Result<(), Box<dyn std::error::Error>> {
 	info!("Checking PDF for {}", day);
-	let temp_dir_path = make_temp_dir();
-	let temp_file_name = get_random_name();
+	let temp_dir_path = util::make_temp_dir();
+	let temp_file_name = util::get_random_name();
 	let temp_file_path = format!("{}/{}", temp_dir_path, temp_file_name);
 	let temp_file_path = Path::new(&temp_file_path);
 
@@ -95,31 +123,41 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	temp_pdf_file.write_all(&pdf)?;
 	let new_schedule = SubstitutionSchedule::from_pdf(temp_file_path)?;
 
-	//Open and parse the json file first, instead of at each iteration in the loop
-	let old_schedule_option: Option<SubstitutionSchedule> = {
-		let old_json_file = std::fs::OpenOptions::new()
-			.read(true)
-			.write(false)
-			.open(format!("./{}/{}.json", PDF_JSON_ROOT_DIR, day));
+	// Check the date in the pdf and if it is too old delete the file (if it exists) and return.
+	if new_schedule.pdf_create_date < chrono::Local::today().and_hms_milli(0, 0, 0, 0).timestamp_millis() {
+		log::info!("Deleting old pdf for day {}", &day);
+		datastore.delete_pdf_json(day)?;
+		return Ok(());
+	}
 
-		if let Ok(old_schedule_json) = old_json_file {
-			match serde_json::from_reader(old_schedule_json) {
-				Ok(old_schedule) => { Some(old_schedule) }
-				Err(why) => {
-					error!("{}", why);
-					panic!("Error parsing the old json");
+	if let Err(why) = datastore.update_class_whitelist(&new_schedule.get_classes()) {
+		log::error!("{}", why);
+	}
+
+	let old_schedule_option: Option<SubstitutionSchedule> = {
+		match datastore.get_pdf_json(day) {
+			Ok(content) => {
+				log::trace!("old_schedule_option datastore pdf was Ok");
+				match serde_json::from_str(content.as_str()) {
+					Ok(old_schedule) => Some(old_schedule),
+					Err(why) => {
+						log::error!("{}", why);
+						None
+					}
 				}
 			}
-		} else {
-			None
+			Err(_) => {
+				None
+			}
 		}
 	};
 
-	let mut to_notify: HashSet<u64> = HashSet::new();
-
 	let data = discord.data.read().await;
+
 	let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 	let classes_and_users_inner = classes_and_users.get_inner_classes_and_users();
+
+	let mut to_notify: HashSet<u64> = HashSet::new();
 
 	let mut add_to_notify = |class| {
 		for user_id in classes_and_users_inner.get(class).unwrap() { // The unwrap is safe since we know the class exists
@@ -143,30 +181,12 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 
 	discord.notify_users(day, &new_schedule, to_notify).await?;
 
-	let new_substitution_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
-	let mut substitution_file = OpenOptions::new()
-		.write(true)
-		.create(true)
-		.truncate(true)
-		.open(format!("{}/{}.json", PDF_JSON_ROOT_DIR, day))
-		.expect("Couldn't open file to write new json");
+	let new_schedule_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
 
-	substitution_file.write_all(new_substitution_json.as_bytes())?;
+	datastore.store_pdf_json(day, new_schedule_json.as_str())?;
 
 	std::fs::remove_file(temp_file_path)?;
 	std::fs::remove_dir(temp_dir_path)?;
+
 	Ok(())
-}
-
-fn get_random_name() -> String {
-	trace!("Returning random name");
-	format!("{}", Uuid::new_v4())
-}
-
-fn make_temp_dir() -> String {
-	trace!("Creating temp directory");
-	let temp_dir_name = get_random_name();
-	let temp_dir = format!("{}/{}", TEMP_ROOT_DIR, temp_dir_name);
-	std::fs::create_dir(Path::new(&temp_dir)).expect("Could not create temp dir");
-	temp_dir
 }

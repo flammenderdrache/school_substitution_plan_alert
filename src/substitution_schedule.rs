@@ -10,8 +10,10 @@ use chrono::{Local, NaiveDate, Offset, Utc};
 use lopdf::Document;
 use serde::{Deserialize, Serialize};
 
+use crate::error::StringError;
 use crate::tabula_json_parser::parse;
 
+/// One column with Substitutions from the PDF
 #[derive(Serialize, Deserialize, PartialOrd, PartialEq, Debug)]
 pub struct Substitutions {
 	#[serde(rename(serialize = "0"))]
@@ -71,6 +73,7 @@ impl Display for Substitutions {
 	}
 }
 
+/// Contains the extracted PDF data of the schedule PDF
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubstitutionSchedule {
 	/// The creation date inside the PDF
@@ -113,7 +116,7 @@ impl SubstitutionSchedule {
 						if let Some(block) = block_option {
 							block.push_str(&format!("\n{}", substitution_part.clone()));
 						} else {
-							block_option.insert(substitution_part.clone());
+							let _ = block_option.insert(substitution_part.clone());
 						}
 					}
 				}
@@ -144,7 +147,7 @@ impl SubstitutionSchedule {
 			.expect("Time got fucked");
 
 		#[allow(clippy::cast_possible_truncation)]
-		let time_millis = since_the_epoch.as_millis() as u64;
+			let time_millis = since_the_epoch.as_millis() as u64;
 
 		Self {
 			pdf_create_date,
@@ -154,7 +157,12 @@ impl SubstitutionSchedule {
 	}
 
 	pub fn from_pdf<T: AsRef<Path> + AsRef<OsStr>>(path: T) -> Result<Self, Box<dyn std::error::Error>> {
-		let pdf = Document::load(&path).unwrap().extract_text(&[1]).unwrap();
+		// let pdf = Document::load(&path).map_err(|_| return Err(StringError::new("PDF is empty or malformed.")))?;
+		let pdf = match Document::load(&path) {
+			Ok(pdf) => pdf,
+			Err(_) => return Err(Box::new(StringError::new("PDF is empty or malformed."))),
+		};
+		let pdf = pdf.extract_text(&[1])?;
 
 		let date_idx_start = pdf.find("Datum: ").ok_or("date not found")?;
 		let date_idx_end = pdf[date_idx_start..].find('\n').ok_or("date end not found")? + date_idx_start;
@@ -172,7 +180,8 @@ impl SubstitutionSchedule {
 			let date = chrono::Date::<Local>::from_utc(
 			NaiveDate::from_ymd(date_str[2] as i32, date_str[1], date_str[0]),
 			Utc.fix(),
-		).and_hms(0, 0, 0).timestamp();
+		).and_hms_milli(0, 0, 0, 0).timestamp_millis();
+
 
 		let output = Command::new("java")
 			.arg("-jar")
@@ -195,6 +204,16 @@ impl SubstitutionSchedule {
 	}
 
 	pub fn _get_entries(&self) -> &HashMap<String, Substitutions> { &self.entries }
+
+	pub fn get_classes(&self) -> HashSet<String> {
+		let mut classes = HashSet::new();
+
+		for class in self.entries.keys() {
+			classes.insert(class.clone());
+		}
+
+		classes
+	}
 
 	/// This function skips entries not present in the 'entries' `HashMap`
 	#[allow(clippy::implicit_clone)]

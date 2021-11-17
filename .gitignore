@@ -1,5 +1,8 @@
 /target
+/.idea
 /.env
 /class_registry.json
 /config.toml
 /pdf-jsons
+/class_whitelist.json
+/data
