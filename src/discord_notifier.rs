@@ -89,6 +89,7 @@ impl DiscordNotifier {
 	}
 
 	pub async fn notify_users(&self, day: Weekdays, substitutions: &SubstitutionSchedule, users_to_notify: HashSet<u64>) -> Result<(), serenity::Error> {
+		log::debug!("Notifying users on discord");
 		let data = self.data.read().await;
 		let classes_and_users = data.get::<ClassesAndUsers>().unwrap();
 
