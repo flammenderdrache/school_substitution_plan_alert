@@ -180,6 +180,7 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	}
 
 	if to_notify.is_empty() {
+		log::debug!("No users are to be notified (to_notify was empty)");
 		return Ok(());
 	}
 
