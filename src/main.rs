@@ -182,9 +182,9 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 	if to_notify.is_empty() {
 		log::debug!("No users are to be notified (to_notify was empty)");
 		return Ok(());
+	} else {
+		discord.notify_users(day, &new_schedule, to_notify).await?;
 	}
-
-	discord.notify_users(day, &new_schedule, to_notify).await?;
 
 	let new_schedule_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
 
