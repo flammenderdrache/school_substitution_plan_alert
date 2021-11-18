@@ -98,6 +98,8 @@ impl DiscordNotifier {
 			let dm_channel = user.create_dm_channel(&self.http).await?;
 			let mut user_class_substitutions = HashMap::new();
 
+			log::debug!("Notifying user {}", user_id);
+
 			for class in classes_and_users.get_user_classes(user_id) {
 				if let Some(class_substitutions) = substitutions.get_substitutions(class.as_str()) {
 					user_class_substitutions.insert(class, class_substitutions);
