@@ -179,19 +179,19 @@ async fn check_weekday_pdf(day: Weekdays, pdf_getter: Arc<SubstitutionPDFGetter<
 		}
 	}
 
-	if to_notify.is_empty() {
-		log::debug!("No users are to be notified (to_notify was empty)");
-		return Ok(());
-	} else {
-		discord.notify_users(day, &new_schedule, to_notify).await?;
-	}
-
 	let new_schedule_json = serde_json::to_string_pretty(&new_schedule).expect("Couldn't write the new Json");
 
 	datastore.store_pdf_json(day, new_schedule_json.as_str())?;
 
 	std::fs::remove_file(temp_file_path)?;
 	std::fs::remove_dir(temp_dir_path)?;
+
+	if to_notify.is_empty() {
+		log::debug!("No users are to be notified for {} (to_notify was empty)", day);
+		return Ok(());
+	}
+
+	discord.notify_users(day, &new_schedule, to_notify).await?;
 
 	Ok(())
 }
